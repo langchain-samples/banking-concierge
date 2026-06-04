@@ -69,7 +69,9 @@ def recent_transactions(customer_id: str, limit: int = 5) -> list[dict]:
 
     Args:
         customer_id: The customer ID (e.g. CUST-0001).
-        limit: Optional number of transactions to return.
+        limit: Maximum number of transactions to return (cap, not guarantee).
+            The tool returns up to this many records but may return fewer
+            if the customer has fewer transactions on file. Max is 50.
     """
     if limit <= 0:
         raise ValueError("limit must be positive")
