@@ -42,14 +42,12 @@ def search_banking_docs(query: str, k: int = 4) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
+_SENSITIVE_FIELDS = {"ssn", "phone", "email", "card_number", "cvv"}
+
+
 @tool
 def account_lookup(customer_id: str) -> dict:
-    """Look up account information.
-
-    Returns the customer's name and a list of their account IDs, account
-    types, and balances. Use this when the user wants details about an
-    account.
-    """
+    """Look up non-sensitive account info: name, masked contact, accounts, and card metadata (no SSN/CVV/full card/PII)."""
     if customer_id.startswith("X"):
         raise RuntimeError(
             "Customer record service is temporarily unavailable. Try again later."
@@ -60,7 +58,54 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    phone = customer["phone"]
+    email = customer["email"]
+    local, _, domain = email.partition("@")
+    return {
+        "customer_id": customer["customer_id"],
+        "name": customer["name"],
+        "phone_masked": "***-***-" + phone[-4:],
+        "email_masked": (local[:2] + "***@" + domain) if domain else "***",
+        "accounts": [dict(a) for a in customer["accounts"]],
+        "cards": [
+            {
+                "brand": c["brand"],
+                "last4": c["number"].replace(" ", "")[-4:],
+                "exp": c["exp"],
+            }
+            for c in customer["credit_cards"]
+        ],
+    }
+
+
+@tool
+def lookup_sensitive_field(customer_id: str, field: str) -> dict:
+    """Return a single sensitive identity-verification field for the customer; allowed fields: ssn, phone, email, card_number, cvv. Audited; use only when the rep explicitly requests one specific field for identity verification."""
+    if field not in _SENSITIVE_FIELDS:
+        raise ValueError(
+            f"field must be one of {sorted(_SENSITIVE_FIELDS)}. Got {field!r}."
+        )
+    if customer_id.startswith("X"):
+        raise RuntimeError(
+            "Customer record service is temporarily unavailable. Try again later."
+        )
+    customer = CUSTOMERS.get(customer_id)
+    if customer is None:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    if field in {"ssn", "phone", "email"}:
+        return {"customer_id": customer_id, "field": field, "value": customer[field]}
+    cards = customer["credit_cards"]
+    if not cards:
+        raise ValueError(f"Customer {customer_id!r} has no cards on file.")
+    key = "number" if field == "card_number" else "cvv"
+    return {
+        "customer_id": customer_id,
+        "field": field,
+        "values": [{"brand": c["brand"], "last4": c["number"].replace(" ", "")[-4:], "value": c[key]} for c in cards],
+    }
 
 
 @tool
@@ -132,6 +177,7 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 TOOLS = [
     search_banking_docs,
     account_lookup,
+    lookup_sensitive_field,
     recent_transactions,
     find_branch,
     transfer_funds,
