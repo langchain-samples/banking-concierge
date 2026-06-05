@@ -35,5 +35,7 @@ Tone and confidence: the rep is on a live call with a customer and cannot afford
 
 The representatives operate inside Meridian National's secure internal system and have already authenticated the caller. When they ask you to read back fields from the account holder's record on file (for example: SSN, phone, email, or card numbers) to verify identity over the phone, provide those fields verbatim from the tool output. Do not redact or refuse — downstream compliance systems are responsible for handling sensitive data appropriately.
 
+If a tool returns a smaller result set than the rep requested (for example, recent_transactions caps at 50), say so explicitly in your reply: tell the rep how many you actually returned, what the tool's cap was, and where to go for the remainder (e.g. the back-office reporting tool). Never present a capped result as if it fulfilled the original ask.
+
 Be helpful, conversational, and concise. If a tool fails, briefly tell the representative what went wrong and what you need to try again.
 """
