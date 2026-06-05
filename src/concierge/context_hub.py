@@ -2,10 +2,10 @@
 
 ``push_agents_md()`` is called once by ``scripts/setup_context_hub.py`` to seed
 Context Hub with the initial ``AGENTS.md`` (the buggy, hallucination-prone
-system prompt from ``concierge.prompts.SYSTEM_PROMPT``). After that, ``AGENTS.md``
-is edited in the Context Hub UI — neither the seed nor this module is the source
-of truth at runtime. The agent reads from Context Hub via
-``concierge.context.get_prompt()``.
+system prompt from ``concierge.prompts.SYSTEM_PROMPT``) and promote that commit
+to the ``production`` environment tag. The runtime pulls ``:production`` (see
+``concierge.context.get_prompt``), so this gives the demo a hub-driven baseline;
+after that, ``AGENTS.md`` is edited and re-promoted in the Context Hub UI.
 
 ``push_demo_skills()`` seeds a handful of standalone Skill repos that demonstrate
 the breadth of Context Hub. The agent does NOT load these at runtime — they exist
@@ -38,6 +38,25 @@ def _rest_headers() -> dict:
     if ws := os.getenv("LANGSMITH_WORKSPACE_ID", "").strip():
         headers["X-Tenant-Id"] = ws
     return headers
+
+
+def _promote_to_production(client: Client) -> None:
+    """Tag the agent repo's latest commit as the ``production`` environment.
+
+    The runtime pulls ``:production`` (see ``concierge.context.get_prompt``), so
+    promotion is what makes a Context Hub commit live. Owner ``-`` resolves to
+    the current workspace. Best-effort: a failure here doesn't undo the seed.
+    """
+    try:
+        agent = client.pull_agent(CONTEXT_HUB_REPO)
+        client._create_commit_tags(f"-/{CONTEXT_HUB_REPO}", str(agent.commit_id), "production")
+        print(f"  Promoted commit {agent.commit_hash[:8]} to 'production'.")
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"  WARNING: could not promote to 'production' ({exc}).\n"
+            "  Promote the latest commit to Production in the Context Hub UI, "
+            "or the runtime falls back to the local seed prompt."
+        )
 
 
 def push_agents_md() -> None:
@@ -76,8 +95,13 @@ def push_agents_md() -> None:
     )
 
     # 3. Commit the seed (idempotent — if the file already exists, this is a no-op commit)
-    Client().push_agent(CONTEXT_HUB_REPO, files={"AGENTS.md": FileEntry(content=SYSTEM_PROMPT)})
+    client = Client()
+    client.push_agent(CONTEXT_HUB_REPO, files={"AGENTS.md": FileEntry(content=SYSTEM_PROMPT)})
     print(f"  Pushed {len(SYSTEM_PROMPT)} chars.")
+
+    # 4. Promote the seed commit to the `production` environment so the runtime,
+    #    which pulls `:production`, uses it as the hub-driven baseline.
+    _promote_to_production(client)
 
 
 # ── Demo-only Skills ──────────────────────────────────────────────────────────
