@@ -1,6 +1,6 @@
 # Demo runbook
 
-Rehearsal-ready clean-slate procedure for the LangSmith Engine demo. Read top to bottom before tearing anything down.
+Rehearsal-ready clean-slate procedure for the LangSmith Engine demo. Read top to bottom before tearing anything down. For what the demo *is*, initial setup, and how the pieces fit together, see the [README](README.md) — this file is the day-of operational runbook, not a concepts doc.
 
 ## 0. Before you delete anything
 
@@ -18,7 +18,7 @@ A safety pass that takes under five minutes.
 
 ## 1. Safe to delete in LangSmith
 
-- All traces in the tracing project (default: `banking-concierge`; legacy: `banking-concierge` if it still exists).
+- All traces in the tracing project (default: `banking-concierge`).
 - Datasets: `banking-concierge-golden`, `banking-concierge-hallucinations`, `banking-concierge-pii`.
 - Every experiment under those datasets.
 - Every Engine-detected issue on the project.
@@ -70,10 +70,10 @@ If you can skip the redeploy because the agent is already running pre-fix code, 
 # Hand-authored golden dataset (7 examples, defined in code)
 uv run python evals/golden_dataset.py --reset
 
-# Engine-generated assertion datasets (restored from snapshots)
-uv run python evals/engine_dataset.py restore --reset
-uv run python evals/engine_dataset.py restore --reset \
-    --name banking-concierge-pii --path evals/engine_dataset_pii.json
+# Engine-generated assertion datasets (restored from snapshots).
+# The dataset name comes from inside each snapshot file, so only --path matters.
+uv run python evals/engine_dataset.py restore --reset                                     # banking-concierge-hallucinations (default path)
+uv run python evals/engine_dataset.py restore --reset --path evals/engine_dataset_pii.json  # banking-concierge-pii
 ```
 
 Each prints the dataset id when done.
@@ -100,8 +100,8 @@ uv run python scripts/load_generation.py --mode remote --n 50 --only hallucinati
 In the LangSmith UI:
 
 1. **Tracing → `banking-concierge` → Engine tab → Enable.**
-2. **Settings → Priorities**: enter or select **hallucinations** *and* a custom phrase like **"agent reads back customer SSN, card number, CVV, phone, or email in plain text"**. Without explicit priorities, Engine ranks issues against a default rubric that may not surface what you want.
-3. **Connect the GitHub repository** so Engine's "Open PR" button works. Use the same connection as before.
+2. **Settings → Priorities**: enter or select **Tool Call Failures**, **Hallucinations**, **Out-of-Scope**, *and* a custom phrase like **"agent reads back customer SSN, card number, CVV, phone, or email in plain text"**. Hallucinations and the PII leak are the two you'll fix on stage; the rest surface the other planted error modes. Without explicit priorities, Engine ranks issues against a default rubric that may not surface what you want.
+3. **Connect the GitHub repository (your fork)** so Engine's "Open PR" button works — the PR lands on your fork, not the shared upstream. Use the same connection as before.
 4. **Accept the agent overview document** when it pops up. Read it — if it's wrong, edit it before accepting; Engine uses it as context for every cluster.
 
 ### 3e. Wait for the first Engine scan
@@ -112,7 +112,12 @@ While you wait:
 
 - Record the baseline locally so you have something to compare CI experiments against:
   ```bash
+  # Hallucinations baseline — the script defaults to the hallucinations dataset
+  # plus the assertions + hallucination evaluators, so no flags are needed.
   uv run python evals/run_engine_experiment.py
+  # PII baseline — override the dataset, prefix, and evaluators. Repeating
+  # --evaluator replaces the defaults, dropping the hallucination scorer that is
+  # irrelevant for PII leaks.
   uv run python evals/run_engine_experiment.py \
     --dataset banking-concierge-pii \
     --experiment-prefix banking-concierge-pii-leak \
@@ -207,6 +212,8 @@ unreachable the agent silently falls back to `prompts.py` — check
 reload → re-enter key.
 
 ## 7. Quick reference
+
+Where each moving part lives. Runnable commands are inline in the rebuild steps (section 3); the README's eval sections cover the same commands with conceptual context.
 
 | What | Where |
 |---|---|
