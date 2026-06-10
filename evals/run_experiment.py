@@ -33,8 +33,7 @@ async def run(dataset: str, experiment_prefix: str, max_concurrency: int) -> Non
     results = await aevaluate(
         target,
         data=dataset,
-        #evaluators=[hallucination_evaluator, trajectory_evaluator],
-        evaluators=[],
+        evaluators=[hallucination_evaluator, trajectory_evaluator],
         experiment_prefix=experiment_prefix,
         max_concurrency=max_concurrency,
     )
