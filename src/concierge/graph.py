@@ -12,10 +12,11 @@ from __future__ import annotations
 import os
 
 from dotenv import load_dotenv
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from openai import APIConnectionError, RateLimitError
 
 from concierge.context import get_prompt
 from concierge.state import ConciergeState
@@ -40,9 +41,17 @@ def _make_model() -> ChatOpenAI:
             temperature=0.2,
             base_url=base_url,
             api_key=os.environ["LANGSMITH_API_KEY"],
+        ).with_retry(
+            retry_if_exception_type=(RateLimitError, APIConnectionError),
+            wait_exponential_jitter=True,
+            stop_after_attempt=4,
         )
     else:
-        client = ChatOpenAI(model=model_name, temperature=0.2)
+        client = ChatOpenAI(model=model_name, temperature=0.2).with_retry(
+            retry_if_exception_type=(RateLimitError, APIConnectionError),
+            wait_exponential_jitter=True,
+            stop_after_attempt=4,
+        )
     return client.bind_tools(TOOLS)
 
 
@@ -50,7 +59,19 @@ def agent_node(state: ConciergeState) -> dict:
     """Call the LLM with the message history plus the system prompt."""
     model = _make_model()
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
-    response = model.invoke(messages)
+    try:
+        response = model.invoke(messages)
+    except (RateLimitError, APIConnectionError):
+        fallback = AIMessage(
+            content=(
+                "I'm hitting a rate limit on the model right now and can't get an answer back. "
+                "Please retry in a moment, or escalate via the desktop tool."
+            )
+        )
+        return {
+            "messages": [fallback],
+            "retrieval_calls": state.get("retrieval_calls", 0),
+        }
 
     retrieval_calls = state.get("retrieval_calls", 0)
     tool_calls = getattr(response, "tool_calls", None) or []
