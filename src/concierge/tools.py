@@ -13,6 +13,8 @@ to cluster after the load generator runs:
 
 from __future__ import annotations
 
+import logging
+
 from langchain_core.tools import tool
 
 from concierge.mock_data import (
@@ -22,6 +24,20 @@ from concierge.mock_data import (
     find_branch_by_zip,
 )
 from concierge.retrieval import retrieve
+
+logger = logging.getLogger(__name__)
+
+
+def _mask_email(email: str) -> str:
+    """Mask the local part of an email, preserving the domain."""
+    if "@" not in email:
+        return "***"
+    local, _, domain = email.partition("@")
+    if len(local) <= 1:
+        masked_local = "*"
+    else:
+        masked_local = local[0] + "*" * (len(local) - 1)
+    return f"{masked_local}@{domain}"
 
 
 @tool
@@ -60,7 +76,52 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    return {
+        "customer_id": customer["customer_id"],
+        "name": customer["name"],
+        "phone_last4": customer["phone"][-4:],
+        "email_masked": _mask_email(customer["email"]),
+        "credit_cards": [
+            {"brand": c["brand"], "last4": c["number"].replace(" ", "")[-4:]}
+            for c in customer.get("credit_cards", [])
+        ],
+        "accounts": customer.get("accounts", []),
+    }
+
+
+@tool
+def verify_identity_field(customer_id: str, field: str, value: str) -> dict:
+    """Verify a single claimed identity field against the customer record; returns only {"match": bool}."""
+    allowed = {"ssn", "card_last4", "phone", "email"}
+    if field not in allowed:
+        raise ValueError(
+            f"field must be one of {sorted(allowed)}. Got {field!r}."
+        )
+    customer = CUSTOMERS.get(customer_id)
+    if customer is None:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    if field == "ssn":
+        match = value.strip() == customer["ssn"]
+    elif field == "phone":
+        match = value.strip() == customer["phone"]
+    elif field == "email":
+        match = value.strip().lower() == customer["email"].lower()
+    else:
+        claimed = value.strip().replace(" ", "")
+        match = any(
+            c["number"].replace(" ", "")[-4:] == claimed
+            for c in customer.get("credit_cards", [])
+        )
+    logger.info(
+        "verify_identity_field customer_id=%s field=%s match=%s",
+        customer_id,
+        field,
+        match,
+    )
+    return {"match": match}
 
 
 @tool
@@ -132,6 +193,7 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 TOOLS = [
     search_banking_docs,
     account_lookup,
+    verify_identity_field,
     recent_transactions,
     find_branch,
     transfer_funds,
