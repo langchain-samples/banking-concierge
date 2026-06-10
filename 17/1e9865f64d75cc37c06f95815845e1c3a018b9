@@ -1,0 +1,24 @@
+README.md
+  s_a66bcdb18079e8::t_1e2e85732a9387 97-100,102
+  s_a66bcdb18079e8::t_788060896b5769 146
+  s_a66bcdb18079e8::t_731d9d4d74609c 133-135,138-145,147-151
+DEMO.md
+  s_a66bcdb18079e8::t_413a7b5702dba8 3
+  s_a66bcdb18079e8::t_d5c5d5fe3da3ce 216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "171e9865f64d75cc37c06f95815845e1c3a018b9",
+  "prompts": {},
+  "sessions": {
+    "s_a66bcdb18079e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0dc0bdc9-cbe7-4fd2-8301-9ae9cbb63168",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
