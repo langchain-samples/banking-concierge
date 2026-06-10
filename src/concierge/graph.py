@@ -43,6 +43,13 @@ def _make_model() -> ChatOpenAI:
         )
     else:
         client = ChatOpenAI(model=model_name, temperature=0.2)
+    client = client.with_config(
+        metadata={
+            "ls_provider": "openai",
+            "ls_model_name": model_name,
+            "ls_message_format": "openai",
+        }
+    )
     return client.bind_tools(TOOLS)
 
 
