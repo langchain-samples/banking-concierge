@@ -43,6 +43,26 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 
 
 @tool
+def find_customer_by_identifier(kind: str, value: str) -> dict:
+    """Resolve a customer_id from an SSN, phone, or card last-4."""
+    kind = kind.lower().strip()
+    if kind not in {"ssn", "phone", "card_last4"}:
+        raise ValueError("kind must be one of: ssn, phone, card_last4")
+    matches: list[str] = []
+    for cust in CUSTOMERS.values():
+        if kind == "ssn" and cust["ssn"] == value:
+            matches.append(cust["customer_id"])
+        elif kind == "phone" and cust["phone"] == value:
+            matches.append(cust["customer_id"])
+        elif kind == "card_last4" and any(
+            c["number"].replace(" ", "")[-4:] == value
+            for c in cust.get("credit_cards", [])
+        ):
+            matches.append(cust["customer_id"])
+    return {"customer_id": matches[0] if len(matches) == 1 else None}
+
+
+@tool
 def account_lookup(customer_id: str) -> dict:
     """Look up account information.
 
@@ -131,6 +151,7 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 
 TOOLS = [
     search_banking_docs,
+    find_customer_by_identifier,
     account_lookup,
     recent_transactions,
     find_branch,
