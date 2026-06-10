@@ -44,11 +44,17 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 
 @tool
 def account_lookup(customer_id: str) -> dict:
-    """Look up account information.
+    """Look up account information by Meridian National customer ID.
+
+    The argument MUST be a Meridian customer ID in the literal format
+    ``CUST-####`` (e.g. ``CUST-0001``). Do NOT pass a credit-card number,
+    an account number, a phone number, or any other identifier — they are
+    not customer IDs and the lookup will fail. If the rep gave you only a
+    card number, call ``lookup_customer_by_card`` instead, then pass the
+    returned customer_id here.
 
     Returns the customer's name and a list of their account IDs, account
-    types, and balances. Use this when the user wants details about an
-    account.
+    types, and balances.
     """
     if customer_id.startswith("X"):
         raise RuntimeError(
@@ -61,6 +67,19 @@ def account_lookup(customer_id: str) -> dict:
             "Customer IDs are in the format CUST-####."
         )
     return dict(customer)
+
+
+@tool
+def lookup_customer_by_card(card_number: str) -> dict:
+    """Find the Meridian customer who owns a given credit-card number."""
+    digits = "".join(ch for ch in card_number if ch.isdigit())
+    for cust in CUSTOMERS.values():
+        for card in cust.get("credit_cards", []):
+            if "".join(ch for ch in card.get("number", "") if ch.isdigit()) == digits:
+                return {"customer_id": cust["customer_id"], "name": cust["name"]}
+    raise ValueError(
+        f"No Meridian customer found for card ending in {digits[-4:]!r}."
+    )
 
 
 @tool
@@ -132,6 +151,7 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 TOOLS = [
     search_banking_docs,
     account_lookup,
+    lookup_customer_by_card,
     recent_transactions,
     find_branch,
     transfer_funds,
