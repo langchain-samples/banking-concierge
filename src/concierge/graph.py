@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 
 from dotenv import load_dotenv
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -40,9 +40,13 @@ def _make_model() -> ChatOpenAI:
             temperature=0.2,
             base_url=base_url,
             api_key=os.environ["LANGSMITH_API_KEY"],
+            max_retries=4,
+            timeout=30,
         )
     else:
-        client = ChatOpenAI(model=model_name, temperature=0.2)
+        client = ChatOpenAI(
+            model=model_name, temperature=0.2, max_retries=4, timeout=30
+        )
     return client.bind_tools(TOOLS)
 
 
@@ -50,7 +54,15 @@ def agent_node(state: ConciergeState) -> dict:
     """Call the LLM with the message history plus the system prompt."""
     model = _make_model()
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
-    response = model.invoke(messages)
+    try:
+        response = model.invoke(messages)
+    except Exception:
+        response = AIMessage(
+            content=(
+                "I hit a temporary error reaching the model. Please try the "
+                "question again in a moment."
+            )
+        )
 
     retrieval_calls = state.get("retrieval_calls", 0)
     tool_calls = getattr(response, "tool_calls", None) or []
