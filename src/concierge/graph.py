@@ -16,6 +16,7 @@ from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from langsmith.run_helpers import get_current_run_tree
 
 from concierge.context import get_prompt
 from concierge.state import ConciergeState
@@ -49,6 +50,10 @@ def _make_model() -> ChatOpenAI:
 def agent_node(state: ConciergeState) -> dict:
     """Call the LLM with the message history plus the system prompt."""
     model = _make_model()
+    environment = os.getenv("MERIDIAN_ENV", "production")
+    run_tree = get_current_run_tree()
+    if run_tree is not None:
+        run_tree.add_metadata({"environment": environment})
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
     response = model.invoke(messages)
 
@@ -76,7 +81,7 @@ def _build_graph():
         {"tools": "tools", END: END},
     )
     builder.add_edge("tools", "agent")
-    return builder.compile()
+    return builder.compile().with_config({"run_name": "banking_concierge"})
 
 
 graph = _build_graph()
