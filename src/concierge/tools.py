@@ -60,7 +60,15 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    # Never expose raw PII (SSN, full PAN, CVV, exp) to the LLM context.
+    safe = dict(customer)
+    ssn = safe.pop("ssn", None) or ""
+    safe["ssn_last4"] = ssn[-4:] if len(ssn) >= 4 else None
+    safe["credit_cards"] = [
+        {"brand": c.get("brand"), "last4": (c.get("number") or "").replace(" ", "")[-4:]}
+        for c in safe.get("credit_cards", [])
+    ]
+    return safe
 
 
 @tool
