@@ -60,7 +60,17 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    record = dict(customer)
+    record.pop("ssn", None)
+    record["credit_cards"] = [
+        {
+            "brand": c["brand"],
+            "last4": c["number"].replace(" ", "")[-4:],
+            "exp": c["exp"],
+        }
+        for c in record.get("credit_cards", [])
+    ]
+    return record
 
 
 @tool
