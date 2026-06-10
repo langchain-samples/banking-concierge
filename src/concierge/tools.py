@@ -67,9 +67,14 @@ def account_lookup(customer_id: str) -> dict:
 def recent_transactions(customer_id: str, limit: int = 5) -> list[dict]:
     """Retrieve a customer's most recent transactions.
 
+    The tool returns at most 50 rows. If the rep asks for more than 50,
+    do NOT silently shrink the request — tell the rep the cap is 50 and
+    confirm before calling. Never claim "here are the last N" when you
+    actually fetched fewer than N.
+
     Args:
-        customer_id: The customer ID (e.g. CUST-0001).
-        limit: Optional number of transactions to return.
+        customer_id: The customer ID in the format ``CUST-####``.
+        limit: Number of transactions to return, between 1 and 50.
     """
     if limit <= 0:
         raise ValueError("limit must be positive")
