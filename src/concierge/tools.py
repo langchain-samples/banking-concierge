@@ -16,6 +16,7 @@ from __future__ import annotations
 from langchain_core.tools import tool
 
 from concierge.mock_data import (
+    BRANCH_VISITS,
     BRANCHES,
     CUSTOMERS,
     TRANSACTIONS,
@@ -129,10 +130,30 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
     }
 
 
+@tool
+def recent_branch_visits(customer_id: str, limit: int = 5) -> list[dict]:
+    """Retrieve a customer's most recent in-branch visits.
+
+    Args:
+        customer_id: The customer ID (e.g. CUST-0001).
+        limit: Optional number of visits to return (max 20).
+    """
+    if limit <= 0 or limit > 20:
+        raise ValueError("limit must be between 1 and 20")
+    if customer_id not in CUSTOMERS:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    visits = BRANCH_VISITS.get(customer_id, [])
+    return [dict(v) for v in visits[:limit]]
+
+
 TOOLS = [
     search_banking_docs,
     account_lookup,
     recent_transactions,
     find_branch,
     transfer_funds,
+    recent_branch_visits,
 ]
