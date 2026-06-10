@@ -23,7 +23,7 @@ def _make_embeddings() -> OpenAIEmbeddings:
     return OpenAIEmbeddings(
         model="text-embedding-3-small",
         base_url="https://api.openai.com/v1",
-        api_key=os.environ["OPENAI_API_KEY"],
+        api_key=os.environ.get("OPENAI_API_KEY") or os.environ.get("LANGSMITH_OPENAI_API_KEY"),
     )
 
 
