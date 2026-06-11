@@ -1,0 +1,25 @@
+README.md
+  s_4b08c7fa84dd9c::t_53630bede4278b 84-91
+.gitignore
+  s_4b08c7fa84dd9c::t_4e4dcabd590b82 13-20
+scripts/setup_context_hub.py
+  s_4b08c7fa84dd9c::t_53630bede4278b 6
+DEMO.md
+  s_4b08c7fa84dd9c::t_53630bede4278b 12,26,49,51,54,58-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "1500df6ec1ee9e3b184c8f1c2a38b612ba520fdc",
+  "prompts": {},
+  "sessions": {
+    "s_4b08c7fa84dd9c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb82b-d234-7733-8f26-ee756d2f0c5c",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Stephen Chu <stephen.chu@langchain.dev>"
+    }
+  }
+}
