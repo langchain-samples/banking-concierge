@@ -3,6 +3,7 @@
 Seeds the LangSmith Context Hub with:
   1. The agent's ``AGENTS.md`` (the buggy, hallucination-prone system prompt) —
      the runtime source of truth that ``concierge.context.get_prompt()`` pulls.
+     The setup promotes the initial prompt commit to the ``production`` tag.
   2. A small library of show-only ``SKILL.md`` repos to demonstrate the hub's
      breadth (the agent does not load these at runtime).
 

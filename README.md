@@ -81,7 +81,14 @@ The agent pulls its system prompt from LangSmith Context Hub, so seed the hub be
 uv run python -m scripts.setup_context_hub
 ```
 
-This creates the `banking-concierge-agent` agent repo (with the buggy `AGENTS.md`) and a few show-only `banking-concierge-*` skill repos. Until it's run, `get_prompt()` falls back to the seed in `prompts.py`, so the agent still works — but the "fix in Context Hub" demo beat needs the hub repo to exist.
+This creates the `banking-concierge-agent` agent repo (with the buggy `AGENTS.md`) and a few show-only `banking-concierge-*` skill repos, then tags the initial prompt commit as `production`. Until it's run, `get_prompt()` falls back to the seed in `prompts.py`, so the agent still works — but the "fix in Context Hub" demo beat needs the hub repo to exist.
+
+For a truly fresh demo rehearsal, delete and recreate those Context Hub artifacts so the prompt history starts clean:
+
+```bash
+uv run python -m scripts.teardown_context_hub --yes
+uv run python -m scripts.setup_context_hub
+```
 
 ## Run locally
 

@@ -9,7 +9,7 @@ A safety pass that takes under five minutes.
 - [ ] **Confirm the dataset snapshots are committed.** They survive any LangSmith wipe.
   ```bash
   jq '.name, (.examples | length)' evals/engine_dataset.json evals/engine_dataset_pii.json
-  # expect: banking-concierge-hallucinations / 7 ; banking-concierge-pii / 16
+  # expect: banking-concierge-hallucinations / 12 ; banking-concierge-pii / 16
   ```
 - [ ] **Screenshot the current Engine issue pages** (diagnosis text, proposed fix, suggested evaluator, "Add offline examples" dialog). Engine regenerates this text per scan and may phrase things differently on the next pass — useful as a backup for the slides.
 - [ ] **Screenshot the Engine-generated PRs** (`issues-agent/<uuid>` branches). The PR URLs and inline review comments will 404 once the run-level traces they cite are gone.
@@ -23,11 +23,11 @@ A safety pass that takes under five minutes.
 - Every experiment under those datasets.
 - Every Engine-detected issue on the project.
 - Annotation queues if any.
+- Context Hub demo repos: `banking-concierge-agent` plus the show-only `banking-concierge-*` skill repos. Delete and recreate these for a true fresh demo so the prompt history starts clean and the baseline `AGENTS.md` is promoted to `production`.
 
 ## 2. Do NOT touch
 
 - **Workspace settings**: Provider Secrets (the OpenAI key stored in the gateway), the PII redaction / secrets redaction policy. They're workspace-scoped and survive project deletion.
-- **Context Hub repos** (`banking-concierge-agent` + the `banking-concierge-*` demo skills). They're workspace-scoped, survive a tracing-project wipe, and the agent pulls `AGENTS.md` from here at runtime. If you delete them, re-seed with `uv run python -m scripts.setup_context_hub` (the agent falls back to `prompts.py` until you do).
 - **The Cloud deployment** (`banking-concierge-…us.langgraph.app`). Deployments are independent of tracing projects/datasets. Deleting them costs you a fresh deploy and a new URL.
 - **`.env`** — all credentials live there.
 - **The repo** — source of truth for everything reproducible.
@@ -46,15 +46,22 @@ The baseline carries **two pre-fix bugs on two different fix surfaces** — that
 
 Combined effect: the deployed baseline confidently invents specific banking numbers when asked off-KB, and reads PII back in plain text when asked. Both are reliable failure clusters.
 
-### 3a-bis. Seed Context Hub
+### 3a-bis. Rebuild Context Hub
 
-The agent pulls its system prompt (`AGENTS.md`) from Context Hub at runtime. Seed it once before deploying:
+The agent pulls its system prompt (`AGENTS.md`) from Context Hub at runtime. For a clean demo reset, delete and recreate the demo Context Hub repos before deploying:
+
+```bash
+uv run python -m scripts.teardown_context_hub --yes
+uv run python -m scripts.setup_context_hub
+```
+
+`teardown_context_hub` deletes the `banking-concierge-agent` agent repo and the show-only `banking-concierge-*` skill repos, including their commits and tags. `setup_context_hub` recreates them, commits the baseline buggy `AGENTS.md`, and tags that initial prompt commit as `production` so the runtime resolves the clean baseline.
+
+If you only need to seed a brand-new workspace, run setup by itself:
 
 ```bash
 uv run python -m scripts.setup_context_hub
 ```
-
-This creates the `banking-concierge-agent` agent repo (buggy `AGENTS.md`) plus a few show-only `banking-concierge-*` skill repos. Re-run after a `--full` Context Hub wipe; harmless to re-run (idempotent).
 
 ```bash
 git checkout main
