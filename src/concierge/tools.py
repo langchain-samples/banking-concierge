@@ -86,6 +86,10 @@ def recent_transactions(customer_id: str, limit: int = 5) -> list[dict]:
     return [dict(t) for t in txs[:limit]]
 
 
+# TODO: reps repeatedly request branch visit history (most recent visit, last
+# time an account holder came into a branch). No data source exists today and
+# inventing mock visits risks fabricated answers in production — pending a
+# product decision on integrating the in-branch teller system.
 @tool
 def find_branch(zip_code: str) -> dict:
     """Find a Meridian National branch.
