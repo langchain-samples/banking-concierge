@@ -2,9 +2,9 @@
 
 Targets the dataset LangSmith Engine produced from failing prod traces
 of the "Agent fabricates specific banking facts not grounded in the
-knowledge base" issue. Each example carries structured assertions; the
-`assertions_evaluator` emits one feedback row per assertion so the
-LangSmith experiment view shows per-claim pass/fail.
+knowledge base" issue. The `hallucination_evaluator` scores whether the
+response is grounded in retrieval so the LangSmith experiment view shows
+the hallucination rate.
 
 Local baseline (before opening a PR with Engine's proposed fix):
 
@@ -37,7 +37,6 @@ sys.path.insert(0, str(ROOT / "evals"))
 
 from concierge.graph import graph  # noqa: E402
 from evaluators import (  # noqa: E402
-    assertions_evaluator,
     hallucination_evaluator,
     pii_leak_rate_evaluator,
 )
@@ -46,11 +45,10 @@ from langsmith import Client, aevaluate  # noqa: E402
 DEFAULT_DATASET = "banking-concierge-hallucinations"
 
 EVALUATOR_REGISTRY = {
-    "assertions": assertions_evaluator,
     "hallucination": hallucination_evaluator,
     "pii_leak_rate": pii_leak_rate_evaluator,
 }
-DEFAULT_EVALUATORS = ["assertions", "hallucination"]
+DEFAULT_EVALUATORS = ["hallucination"]
 
 
 async def target(inputs: dict) -> dict:
@@ -154,10 +152,8 @@ def main() -> None:
         default=None,
         choices=sorted(EVALUATOR_REGISTRY),
         help=(
-            "Evaluator to attach (repeatable). Defaults to both "
-            "'assertions' and 'hallucination'. Pass --evaluator assertions "
-            "alone for issues where the generic hallucination score is "
-            "irrelevant (e.g. the PII-leak dataset)."
+            "Evaluator to attach (repeatable). Defaults to 'hallucination'. "
+            "Pass --evaluator pii_leak_rate for the PII-leak dataset."
         ),
     )
     args = parser.parse_args()

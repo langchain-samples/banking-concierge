@@ -77,7 +77,7 @@ If you can skip the redeploy because the agent is already running pre-fix code, 
 # Hand-authored golden dataset (7 examples, defined in code)
 uv run python evals/golden_dataset.py --reset
 
-# Engine-generated assertion datasets (restored from snapshots).
+# Engine-generated datasets (restored from snapshots).
 # The dataset name comes from inside each snapshot file, so only --path matters.
 uv run python evals/engine_dataset.py restore --reset                                     # banking-concierge-hallucinations (default path)
 uv run python evals/engine_dataset.py restore --reset --path evals/engine_dataset_pii.json  # banking-concierge-pii
@@ -120,15 +120,15 @@ While you wait:
 - Record the baseline locally so you have something to compare CI experiments against:
   ```bash
   # Hallucinations baseline — the script defaults to the hallucinations dataset
-  # plus the assertions + hallucination evaluators, so no flags are needed.
+  # plus the hallucination evaluator, so no flags are needed.
   uv run python evals/run_engine_experiment.py
-  # PII baseline — override the dataset, prefix, and evaluators. Repeating
-  # --evaluator replaces the defaults, dropping the hallucination scorer that is
+  # PII baseline — override the dataset, prefix, and evaluator. Repeating
+  # --evaluator replaces the default, dropping the hallucination scorer that is
   # irrelevant for PII leaks.
   uv run python evals/run_engine_experiment.py \
     --dataset banking-concierge-pii \
     --experiment-prefix banking-concierge-pii-leak \
-    --evaluator assertions --evaluator pii_leak_rate
+    --evaluator pii_leak_rate
   ```
 - Note the experiment names that print. You'll cite these on stage as "before fix".
 
@@ -137,7 +137,7 @@ While you wait:
 For each issue Engine surfaces (hallucinations + PII):
 
 1. Click into the issue → review the diagnosis.
-2. **Add offline examples → Add to dataset** (target `banking-concierge-hallucinations` or `banking-concierge-pii` accordingly). If Engine produces slightly different assertions than the snapshot, that's OK — the snapshot is your safety net.
+2. **Add offline examples → Add to dataset** (target `banking-concierge-hallucinations` or `banking-concierge-pii` accordingly). If Engine produces slightly different examples than the snapshot, that's OK — the snapshot is your safety net.
 3. **Apply the fix on the right surface:**
    - **Hallucination → Context Hub.** Engine's diagnosis points at `AGENTS.md` in the hub. Open the `banking-concierge-agent` repo in **Context → ** the Context Hub UI, edit `AGENTS.md` to replace the "answer rates from memory" paragraph with strict grounding rules, save the commit, and promote it to `production`. The deployed agent pulls the new version on its next run — no redeploy. (Restart the deployment if you pinned the prompt at import.)
    - **PII → GitHub PR.** Click **Open PR**; Engine pushes an `issues-agent/<uuid>` branch with the `tools.py` masking fix.
@@ -146,8 +146,8 @@ For each issue Engine surfaces (hallucinations + PII):
 
 ### 3g. Compare on stage
 
-- LangSmith → Datasets → `banking-concierge-hallucinations` → Compare → pick baseline + PR experiment → show per-assertion column toggling FAIL → PASS.
-- Same for `banking-concierge-pii`. The `pii_leak_rate` aggregate goes from ~0.5 to 0.0; per-assertion columns flip too.
+- LangSmith → Datasets → `banking-concierge-hallucinations` → Compare → pick baseline + PR experiment → show the `hallucination` aggregate dropping toward 0.
+- Same for `banking-concierge-pii`. The `pii_leak_rate` aggregate goes from ~0.5 to 0.0.
 
 ## 4. Optional: PII gateway demo
 
@@ -184,8 +184,7 @@ key and redeploy. If using the gateway, rotate the Provider Secret instead.
 *Cause:* PR is a draft.
 *Fix:* `gh pr ready <N>`.
 
-**CI workflow ran but used `--evaluator assertions` only on the PII job (no
-`pii_leak_rate` column)**
+**CI workflow ran but the PII job is missing the `pii_leak_rate` column**
 *Cause:* Workflow definition on `main` is stale.
 *Fix:* Make sure latest `main` is pushed; CI reads the workflow from the PR's
 base ref.

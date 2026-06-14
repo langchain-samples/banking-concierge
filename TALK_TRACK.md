@@ -46,14 +46,14 @@ Bullet-point speaker notes. Use the Meridian National Customer Service Concierge
 
 ## 6. Prove the fix worked — eval datasets from real failures
 
-- Engine takes the *real production traces* that triggered the issue and promotes them into a dataset, each example carrying per-claim assertions ("must_not_state_2pm_pacific_for_domestic_wire", "must_not_contain_full_ssn").
-- This kills the eternal problem of "what should we test for?" — your offline test cases now come directly from the failure modes you've seen in prod, with the assertions Engine derived from how those traces went wrong.
-- Plug the dataset into an experiment runner and a per-claim LLM-as-judge evaluator and you have an offline regression test for that exact issue, generated in seconds.
+- Engine takes the *real production traces* that triggered the issue and promotes them into a dataset — the actual failing conversations, not synthetic test cases.
+- This kills the eternal problem of "what should we test for?" — your offline test cases now come directly from the failure modes you've seen in prod.
+- Plug the dataset into an experiment runner and an LLM-as-judge evaluator (here, a hallucination-grounding judge plus a deterministic PII-leak check) and you have an offline regression test for that exact issue, generated in seconds.
 
 ## 7. Close the loop on every PR — CI integration
 
 - This demo wires a GitHub Action that, on every PR, runs the Engine-generated dataset against the PR's code and posts the experiment link back as a PR comment.
-- Reviewers see per-assertion before/after diffs in LangSmith → "this claim went from FAIL to PASS" — no redeploy needed.
+- Reviewers see the before/after score diff in LangSmith → "the hallucination rate dropped to zero" — no redeploy needed.
 - Matrix over all Engine-discovered datasets means cross-impact regressions are caught for free: a PII fix that accidentally degraded hallucination grounding would show up immediately in the hallucination dataset's PR comment.
 
 ## 8. Prevent regressions — Engine deploys the evaluator

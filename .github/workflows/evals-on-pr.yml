@@ -36,11 +36,11 @@ jobs:
           - alias: hallucinations
             dataset: banking-concierge-hallucinations
             experiment_prefix: hallucinations
-            evaluator_args: "--evaluator assertions --evaluator hallucination"
+            evaluator_args: "--evaluator hallucination"
           - alias: pii
             dataset: banking-concierge-pii
             experiment_prefix: pii-leak
-            evaluator_args: "--evaluator assertions --evaluator pii_leak_rate"
+            evaluator_args: "--evaluator pii_leak_rate"
 
     env:
       # Required for the agent + judge
@@ -112,7 +112,7 @@ jobs:
               `**Dataset:** \`${DATASET_NAME}\``,
               `**Open in LangSmith:** ${EXPERIMENT_URL}`,
               ``,
-              `Compare against the \`main\`-branch baseline in LangSmith to see per-assertion improvements for this issue.`,
+              `Compare against the \`main\`-branch baseline in LangSmith to see the score improvement for this issue.`,
             ].join("\n");
             await github.rest.issues.createComment({
               issue_number: context.issue.number,

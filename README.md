@@ -34,9 +34,9 @@ scripts/
   setup_context_hub.py   One-shot: seeds the hub with AGENTS.md + demo skills
 evals/
   golden_dataset.py         Creates the 7-example banking-concierge-golden dataset
-  evaluators.py             LLM judges (hallucination, trajectory, assertions) + pii_leak_rate regex check
+  evaluators.py             LLM judges (hallucination, trajectory) + pii_leak_rate regex check
   run_experiment.py         aevaluate(...) runner for the golden dataset
-  run_engine_experiment.py  Runner for the Engine assertion datasets (hallucinations / pii)
+  run_engine_experiment.py  Runner for the Engine datasets (hallucinations / pii)
   engine_dataset.py         Snapshots the Engine datasets to/from committed JSON (export / restore)
   engine_dataset.json       Committed snapshot of banking-concierge-hallucinations
   engine_dataset_pii.json   Committed snapshot of banking-concierge-pii
@@ -165,27 +165,26 @@ This runs `aevaluate` over `banking-concierge-golden`, attaching two LLM-as-judg
 
 ## Engine-issue regression demo
 
-When Engine promotes a failing prod trace into a dataset, it stores per-claim **assertions** instead of a single reference answer. `evals/run_engine_experiment.py` — a separate runner from the `run_experiment.py` golden-dataset runner above; this one grades the Engine-generated assertion datasets — targets one such dataset (the "agent fabricates specific banking facts" hallucinations dataset by default) and runs two evaluators against it:
+When Engine promotes a failing prod trace into a dataset, the dataset becomes a regression suite for that issue. `evals/run_engine_experiment.py` — a separate runner from the `run_experiment.py` golden-dataset runner above — targets one such dataset (the "agent fabricates specific banking facts" hallucinations dataset by default) and runs an evaluator against it:
 
-- `assertions_evaluator` — emits one feedback row per assertion (`must_not_state_2pm_pacific_for_domestic_wire`, `must_ground_cutoff_in_retrieval`, etc.) so the LangSmith UI shows per-claim pass/fail.
-- `hallucination_evaluator` — same aggregate hallucination score used elsewhere, for a single headline number.
+- `hallucination_evaluator` — the aggregate hallucination score used elsewhere, for a single headline number (1.0 = ungrounded, 0.0 = grounded; higher is worse). The PII dataset uses `pii_leak_rate` instead.
 
 Run the baseline for **both** headline issues before applying Engine's fixes:
 
 ```bash
 # hallucinations dataset — uses the defaults (banking-concierge-hallucinations
-# dataset + the assertions and hallucination evaluators), so no flags needed
+# dataset + the hallucination evaluator), so no flags needed
 uv run python evals/run_engine_experiment.py
 
-# pii dataset — needs its own dataset, experiment prefix, and evaluators
-# (the defaults are hallucination-specific; repeating --evaluator replaces them)
+# pii dataset — needs its own dataset, experiment prefix, and evaluator
+# (the default is hallucination-specific; repeating --evaluator replaces it)
 uv run python evals/run_engine_experiment.py \
   --dataset banking-concierge-pii \
   --experiment-prefix banking-concierge-pii-leak \
-  --evaluator assertions --evaluator pii_leak_rate
+  --evaluator pii_leak_rate
 ```
 
-Then apply Engine's fix for each (Context Hub edit for the hallucination, GitHub PR for the PII leak), redeploy, and re-run the **same two commands** — each appears as a new experiment on its dataset. Open the before/after pair side-by-side in LangSmith → Experiments to watch the per-assertion columns flip FAIL → PASS.
+Then apply Engine's fix for each (Context Hub edit for the hallucination, GitHub PR for the PII leak), redeploy, and re-run the **same two commands** — each appears as a new experiment on its dataset. Open the before/after pair side-by-side in LangSmith → Experiments to watch the score improve.
 
 ### Repeatable demo via GitHub Actions
 
@@ -198,7 +197,7 @@ Demo flow:
 1. Run the baseline locally on `main` once: `uv run python evals/run_engine_experiment.py`
 2. Engine opens a PR with the proposed fix (or you open one with the fix applied).
 3. The workflow fires automatically, runs the experiment against the PR's code, and comments the LangSmith link on the PR.
-4. In LangSmith → Datasets → `banking-concierge-hallucinations` → Compare, pick the baseline experiment and the PR experiment to show per-assertion improvements without ever shipping the fix.
+4. In LangSmith → Datasets → `banking-concierge-hallucinations` → Compare, pick the baseline experiment and the PR experiment to show the score improvement without ever shipping the fix.
 
 Required GitHub configuration:
 

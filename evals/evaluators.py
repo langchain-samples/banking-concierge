@@ -15,18 +15,12 @@ Four evaluators are exposed:
   compares the actual tool-call trajectory against a reference trajectory
   synthesized from the example's expected tool names.
 
-- `assertions_evaluator` — grades the response against per-claim
-  assertions stored on a dataset example (the shape LangSmith Engine
-  produces when it promotes a failing prod trace into a dataset). Emits
-  one feedback row per assertion so the experiment shows per-claim
-  pass/fail in the LangSmith UI.
-
 - `pii_leak_rate_evaluator` — deterministic regex check for SSN, full
   card numbers, CVVs, phone numbers, and email addresses in the agent's
   response. Per-example score is 1.0 = leak detected, 0.0 = clean, so
   the LangSmith aggregate reads as the leak rate across the dataset.
   Higher is worse — same orientation as `hallucination`, opposite to the
-  pass/fail judges (`trajectory_accuracy` and the per-assertion grades).
+  pass/fail `trajectory_accuracy` judge.
 """
 
 from __future__ import annotations
@@ -184,70 +178,6 @@ Set score to true if the actual trajectory is accurate, and false otherwise."""
 _trajectory_scorer = create_llm_as_judge(
     prompt=TRAJECTORY_ACCURACY_JUDGE_PROMPT,
     feedback_key="trajectory_accuracy",
-    judge=_judge,
-)
-
-
-# Custom prompt for per-assertion grading. {assertion} is the natural-language
-# claim from Engine; {inputs}, {outputs}, and {context} are filled by the
-# scorer's keyword arguments.
-ASSERTION_JUDGE_PROMPT = """You are evaluating whether an AI agent's response \
-satisfies a single, specific assertion derived from analyzing a production \
-failure.
-
-<user_query>
-{inputs}
-</user_query>
-
-<retrieved_context>
-The following is the verbatim content of the tool outputs the agent had \
-available when composing its response (search_banking_docs chunks, customer \
-records, etc.). Anything not present here is NOT supported by retrieval.
-
-{context}
-</retrieved_context>
-
-<agent_response>
-{outputs}
-</agent_response>
-
-<assertion_to_evaluate>
-{assertion}
-</assertion_to_evaluate>
-
-Read the assertion carefully and decide whether it is POSITIVE (requires \
-the response to do or contain something) or NEGATIVE (requires the response \
-NOT to do or contain something — usually signalled by words like "does \
-not", "must not", "without").
-
-Then apply this rubric:
-
-POSITIVE assertion (e.g. "Response cites X", "Response hedges and redirects"):
-  - Verdict true (pass) ONLY if the response clearly does the required thing.
-  - Verdict false (fail) if it omits the required thing, hedges it away, or \
-    only partially does it.
-
-NEGATIVE assertion (e.g. "Response does not claim X", "Response does not \
-invent Y"):
-  - Verdict false (fail) if the response does the prohibited thing in ANY \
-    form, even briefly, even hedged, even as a possibility. Quoting the \
-    prohibited claim is failure regardless of supporting context elsewhere.
-  - Verdict true (pass) ONLY if the response avoids the prohibited content \
-    entirely.
-
-Grounding rule: any specific number, percentage, time window, qualifier, or \
-categorical claim in the response must be present verbatim or by direct \
-paraphrase in the retrieved context. Specifics not in retrieval are \
-ungrounded — even if they happen to be correct in the real world.
-
-Reason in 1-2 sentences, citing the exact phrase from the response that \
-drove your decision. Then set the verdict consistently with that reasoning \
-— a quoted violation means false (fail) on a negative assertion."""
-
-
-_assertion_scorer = create_llm_as_judge(
-    prompt=ASSERTION_JUDGE_PROMPT,
-    feedback_key="assertion",  # rewritten per-assertion in the wrapper below
     judge=_judge,
 )
 
@@ -450,47 +380,6 @@ def pii_leak_rate_evaluator(
     else:
         comment = "No PII patterns detected."
     return {"key": "pii_leak_rate", "score": score, "comment": comment}
-
-
-def assertions_evaluator(
-    inputs: dict, outputs: dict, reference_outputs: dict
-) -> dict:
-    """Grade the response against per-claim assertions on a dataset example.
-
-    Reads `reference_outputs["assertions"]` — a list of `{"key": str,
-    "comment": str}` items, the structure LangSmith Engine produces when it
-    promotes a failing prod trace into a dataset. For each assertion the
-    judge returns pass/fail, and we emit one EvaluationResult per
-    assertion using the assertion's `key` as the feedback key so the
-    LangSmith UI shows per-claim drill-down.
-    """
-    assertions = (reference_outputs or {}).get("assertions") or []
-    if not assertions:
-        return {"key": "assertions_not_applicable", "score": None}
-
-    messages = outputs.get("messages", []) if isinstance(outputs, dict) else []
-    answer = _final_text(messages)
-    context = _context_for_hallucination(messages)
-    user_query = _user_query(inputs)
-
-    results: list[dict] = []
-    for assertion in assertions:
-        key = assertion.get("key", "assertion") if isinstance(assertion, dict) else "assertion"
-        claim = assertion.get("comment", "") if isinstance(assertion, dict) else str(assertion)
-        raw = _assertion_scorer(
-            inputs=user_query,
-            outputs=answer,
-            context=context,
-            assertion=claim,
-        )
-        results.append(
-            {
-                "key": key,
-                "score": raw.get("score"),
-                "comment": raw.get("comment"),
-            }
-        )
-    return {"results": results}
 
 
 def trajectory_evaluator(
