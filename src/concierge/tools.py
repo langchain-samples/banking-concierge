@@ -44,12 +44,7 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 
 @tool
 def account_lookup(customer_id: str) -> dict:
-    """Look up account information.
-
-    Returns the customer's name and a list of their account IDs, account
-    types, and balances. Use this when the user wants details about an
-    account.
-    """
+    """Look up account information; returns masked SSN and masked card numbers only (use get_ssn_last4 / get_card_last4 for narrow verification reads)."""
     if customer_id.startswith("X"):
         raise RuntimeError(
             "Customer record service is temporarily unavailable. Try again later."
@@ -60,7 +55,56 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    ssn = customer.get("ssn", "")
+    masked_ssn = f"***-**-{ssn[-4:]}" if len(ssn) >= 4 else "***-**-****"
+    masked_cards = []
+    for card in customer.get("credit_cards", []):
+        digits = "".join(ch for ch in card.get("number", "") if ch.isdigit())
+        masked_cards.append(
+            {
+                "brand": card.get("brand"),
+                "number": f"****-****-****-{digits[-4:]}" if len(digits) >= 4 else "****-****-****-****",
+            }
+        )
+    return {
+        "customer_id": customer["customer_id"],
+        "name": customer["name"],
+        "phone": customer.get("phone"),
+        "email": customer.get("email"),
+        "ssn_masked": masked_ssn,
+        "credit_cards": masked_cards,
+        "accounts": [dict(a) for a in customer.get("accounts", [])],
+    }
+
+
+@tool
+def get_ssn_last4(customer_id: str) -> str:
+    """Return only the last four digits of a customer's SSN for verification."""
+    customer = CUSTOMERS.get(customer_id)
+    if customer is None:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    return customer["ssn"][-4:]
+
+
+@tool
+def get_card_last4(customer_id: str, card_index: int = 0) -> str:
+    """Return only the last four digits of a customer's credit card for verification."""
+    customer = CUSTOMERS.get(customer_id)
+    if customer is None:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    cards = customer.get("credit_cards", [])
+    if not 0 <= card_index < len(cards):
+        raise ValueError(
+            f"card_index {card_index} out of range for customer {customer_id!r}."
+        )
+    digits = "".join(ch for ch in cards[card_index].get("number", "") if ch.isdigit())
+    return digits[-4:]
 
 
 @tool
@@ -132,6 +176,8 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 TOOLS = [
     search_banking_docs,
     account_lookup,
+    get_ssn_last4,
+    get_card_last4,
     recent_transactions,
     find_branch,
     transfer_funds,
