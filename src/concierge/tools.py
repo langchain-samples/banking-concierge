@@ -44,11 +44,22 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 
 @tool
 def account_lookup(customer_id: str) -> dict:
-    """Look up account information.
+    """Look up account information by exact CUST-#### identifier.
 
     Returns the customer's name and a list of their account IDs, account
     types, and balances. Use this when the user wants details about an
     account.
+
+    This tool ONLY accepts an exact CUST-#### identifier. It does NOT
+    perform reverse lookup by name, SSN, phone, card number, or email,
+    and it will return SOME real customer's record for any well-formed
+    CUST-#### with no verification that the ID matches the caller you
+    are helping — so guessing is unsafe and will disclose another
+    customer's PII.
+
+    Do NOT guess CUST-#### values (do not try CUST-0001, CUST-0002,
+    etc.). If the rep has not given you a CUST-#### verbatim, ask them
+    for one instead of calling this tool.
     """
     if customer_id.startswith("X"):
         raise RuntimeError(
