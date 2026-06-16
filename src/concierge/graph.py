@@ -40,9 +40,14 @@ def _make_model() -> ChatOpenAI:
             temperature=0.2,
             base_url=base_url,
             api_key=os.environ["LANGSMITH_API_KEY"],
+            metadata={"ls_provider": "openai", "ls_model_name": model_name},
         )
     else:
-        client = ChatOpenAI(model=model_name, temperature=0.2)
+        client = ChatOpenAI(
+            model=model_name,
+            temperature=0.2,
+            metadata={"ls_provider": "openai", "ls_model_name": model_name},
+        )
     return client.bind_tools(TOOLS)
 
 
@@ -79,4 +84,11 @@ def _build_graph():
     return builder.compile()
 
 
-graph = _build_graph()
+graph = _build_graph().with_config(
+    {
+        "run_name": "banking_concierge",
+        "metadata": {
+            "environment": os.getenv("CONCIERGE_ENVIRONMENT", "production"),
+        },
+    }
+)
