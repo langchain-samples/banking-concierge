@@ -42,6 +42,19 @@ def search_banking_docs(query: str, k: int = 4) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
+def _redact_customer(customer: dict) -> dict:
+    """Strip PCI-regulated cardholder data and mask SSN before returning to the model."""
+    redacted = dict(customer)
+    ssn = customer.get("ssn") or ""
+    if ssn:
+        redacted["ssn"] = f"***-**-{ssn[-4:]}"
+    redacted["credit_cards"] = [
+        {"brand": c["brand"], "number_last4": c["number"][-4:], "exp": c["exp"]}
+        for c in customer.get("credit_cards", [])
+    ]
+    return redacted
+
+
 @tool
 def account_lookup(customer_id: str) -> dict:
     """Look up account information.
@@ -60,7 +73,7 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    return _redact_customer(customer)
 
 
 @tool
