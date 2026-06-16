@@ -1,18 +1,19 @@
-"""Export / restore the Engine-generated dataset to/from a JSON file.
+"""Export / restore a LangSmith dataset to/from a committed JSON snapshot.
 
-Usage:
-    # one-time after Engine creates the dataset — dumps to evals/engine_dataset.json
-    uv run python evals/engine_dataset.py export
+Pick the dataset by name — `golden`, `pii`, or `hallucinations`:
 
-    # after wiping LangSmith for a demo rehearsal — recreates from the JSON
-    uv run python evals/engine_dataset.py restore
-    uv run python evals/engine_dataset.py restore --reset    # overwrite if exists
+    # recreate a dataset in LangSmith from its committed snapshot
+    uv run python evals/dataset_snapshot.py restore golden
+    uv run python evals/dataset_snapshot.py restore golden --reset    # overwrite if exists
 
-The JSON file is meant to be committed to the repo so the
-Engine-generated assertions survive deletions and produce a
-reproducible baseline for demo practice. If Engine creates a fresh
-dataset under the same name, you can either accept it (Engine usually
-produces equivalent assertions) or restore from the snapshot.
+    # pull the live dataset back down into its snapshot (e.g. after Engine
+    # regenerates it, or after editing the golden examples in LangSmith)
+    uv run python evals/dataset_snapshot.py export hallucinations
+
+Each choice maps to a dataset name and a committed snapshot file (see
+DATASETS below); override either with --name / --path. The snapshots are
+committed to the repo so the datasets survive deletions and produce a
+reproducible baseline for demo practice — no waiting on an Engine scan.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -27,8 +29,38 @@ from langsmith import Client
 
 load_dotenv(override=True)
 
-DEFAULT_DATASET_NAME = "banking-concierge-hallucinations"
-SNAPSHOT_PATH = Path(__file__).resolve().parent / "engine_dataset.json"
+HERE = Path(__file__).resolve().parent
+
+
+@dataclass(frozen=True)
+class DatasetConfig:
+    name: str
+    path: Path
+
+
+DATASETS = {
+    "golden": DatasetConfig("banking-concierge-golden", HERE / "dataset_golden.json"),
+    "hallucinations": DatasetConfig(
+        "banking-concierge-hallucinations", HERE / "dataset_hallucinations.json"
+    ),
+    "pii": DatasetConfig("banking-concierge-pii", HERE / "dataset_pii.json"),
+}
+
+EXAMPLES = """\
+examples:
+  uv run python evals/dataset_snapshot.py restore golden --reset    # recreate from snapshot
+  uv run python evals/dataset_snapshot.py restore hallucinations    # skip if it already exists
+  uv run python evals/dataset_snapshot.py export pii                # pull live dataset into its snapshot
+"""
+
+
+class _ExamplesParser(argparse.ArgumentParser):
+    """Show usage + examples instead of a terse usage line on error."""
+
+    def error(self, message: str):
+        self.print_usage(sys.stderr)
+        sys.stderr.write(f"\nerror: {message}\n\n{EXAMPLES}")
+        raise SystemExit(2)
 
 
 def export_dataset(name: str, path: Path) -> None:
@@ -56,7 +88,7 @@ def export_dataset(name: str, path: Path) -> None:
 def restore_dataset(path: Path, reset: bool) -> None:
     if not path.is_file():
         raise SystemExit(
-            f"Snapshot not found at {path}. Run `engine_dataset.py export` first."
+            f"Snapshot not found at {path}. Run `dataset_snapshot.py export` first."
         )
 
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -98,22 +130,31 @@ def restore_dataset(path: Path, reset: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = _ExamplesParser(
+        description=__doc__,
+        epilog=EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "mode",
         choices=("export", "restore"),
         help="export: pull from LangSmith into the snapshot. restore: push snapshot back.",
     )
     parser.add_argument(
+        "dataset_choice",
+        choices=sorted(DATASETS),
+        help="Which dataset to act on.",
+    )
+    parser.add_argument(
         "--name",
-        default=DEFAULT_DATASET_NAME,
-        help=f"Dataset name in LangSmith (default: {DEFAULT_DATASET_NAME!r}).",
+        default=None,
+        help="Override the dataset name in LangSmith for the chosen dataset.",
     )
     parser.add_argument(
         "--path",
         type=Path,
-        default=SNAPSHOT_PATH,
-        help=f"Snapshot file path (default: {SNAPSHOT_PATH}).",
+        default=None,
+        help="Override the snapshot file path for the chosen dataset.",
     )
     parser.add_argument(
         "--reset",
@@ -122,12 +163,16 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    config = DATASETS[args.dataset_choice]
+    name = args.name or config.name
+    path = args.path or config.path
+
     if args.mode == "export":
         if args.reset:
             print("--reset is ignored in export mode.", file=sys.stderr)
-        export_dataset(args.name, args.path)
+        export_dataset(name, path)
     else:
-        restore_dataset(args.path, args.reset)
+        restore_dataset(path, args.reset)
 
 
 if __name__ == "__main__":

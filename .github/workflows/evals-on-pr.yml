@@ -36,11 +36,9 @@ jobs:
           - alias: hallucinations
             dataset: banking-concierge-hallucinations
             experiment_prefix: hallucinations
-            evaluator_args: "--evaluator hallucination"
           - alias: pii
             dataset: banking-concierge-pii
             experiment_prefix: pii-leak
-            evaluator_args: "--evaluator pii_leak_rate"
 
     env:
       # Required for the agent + judge
@@ -78,10 +76,9 @@ jobs:
           SHA_SHORT=$(git rev-parse --short "${{ github.event.pull_request.head.sha }}")
           PREFIX="${{ matrix.experiment_prefix }}-pr-${PR}-${SHA_SHORT}"
 
-          uv run python evals/run_engine_experiment.py \
+          uv run python evals/run_experiment.py "${{ matrix.alias }}" \
             --dataset "${{ matrix.dataset }}" \
             --experiment-prefix "$PREFIX" \
-            ${{ matrix.evaluator_args }} \
             --metadata "pr_number=${PR}" \
             --metadata "commit_sha=${{ github.event.pull_request.head.sha }}" \
             --metadata "branch=${{ github.event.pull_request.head.ref }}" \

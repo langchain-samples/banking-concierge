@@ -8,7 +8,7 @@ A safety pass that takes under five minutes.
 
 - [ ] **Confirm the dataset snapshots are committed.** They survive any LangSmith wipe.
   ```bash
-  jq '.name, (.examples | length)' evals/engine_dataset.json evals/engine_dataset_pii.json
+  jq '.name, (.examples | length)' evals/dataset_hallucinations.json evals/dataset_pii.json
   # expect: banking-concierge-hallucinations / 12 ; banking-concierge-pii / 16
   ```
 - [ ] **Screenshot the current Engine issue pages** (diagnosis text, proposed fix, suggested evaluator, "Add offline examples" dialog). Engine regenerates this text per scan and may phrase things differently on the next pass — useful as a backup for the slides.
@@ -74,13 +74,11 @@ If you can skip the redeploy because the agent is already running pre-fix code, 
 ### 3b. Recreate datasets
 
 ```bash
-# Hand-authored golden dataset (7 examples, defined in code)
-uv run python evals/golden_dataset.py --reset
-
-# Engine-generated datasets (restored from snapshots).
-# The dataset name comes from inside each snapshot file, so only --path matters.
-uv run python evals/engine_dataset.py restore --reset                                     # banking-concierge-hallucinations (default path)
-uv run python evals/engine_dataset.py restore --reset --path evals/engine_dataset_pii.json  # banking-concierge-pii
+# Restore each dataset from its committed snapshot. The positional choice
+# picks the dataset name + snapshot file (golden / hallucinations / pii).
+uv run python evals/dataset_snapshot.py restore golden --reset
+uv run python evals/dataset_snapshot.py restore hallucinations --reset
+uv run python evals/dataset_snapshot.py restore pii --reset
 ```
 
 Each prints the dataset id when done.
@@ -119,16 +117,9 @@ While you wait:
 
 - Record the baseline locally so you have something to compare CI experiments against:
   ```bash
-  # Hallucinations baseline — the script defaults to the hallucinations dataset
-  # plus the hallucination evaluator, so no flags are needed.
-  uv run python evals/run_engine_experiment.py
-  # PII baseline — override the dataset, prefix, and evaluator. Repeating
-  # --evaluator replaces the default, dropping the hallucination scorer that is
-  # irrelevant for PII leaks.
-  uv run python evals/run_engine_experiment.py \
-    --dataset banking-concierge-pii \
-    --experiment-prefix banking-concierge-pii-leak \
-    --evaluator pii_leak_rate
+  # Each positional choice selects its dataset, evaluator, and experiment prefix.
+  uv run python evals/run_experiment.py hallucinations
+  uv run python evals/run_experiment.py pii
   ```
 - Note the experiment names that print. You'll cite these on stage as "before fix".
 
@@ -223,10 +214,10 @@ Where each moving part lives. Runnable commands are inline in the rebuild steps 
 
 | What | Where |
 |---|---|
-| Hallucinations dataset snapshot | `evals/engine_dataset.json` |
-| PII dataset snapshot | `evals/engine_dataset_pii.json` |
-| Golden dataset (hand-authored) | `evals/golden_dataset.py` |
-| Baseline experiment script | `evals/run_engine_experiment.py` |
+| Golden dataset snapshot | `evals/dataset_golden.json` |
+| Hallucinations dataset snapshot | `evals/dataset_hallucinations.json` |
+| PII dataset snapshot | `evals/dataset_pii.json` |
+| Baseline experiment script | `evals/run_experiment.py` |
 | Loadgen | `scripts/load_generation.py` |
 | Context Hub seeder | `scripts/setup_context_hub.py` |
 | Pre-fix system prompt (runtime) | Context Hub `banking-concierge-agent` / `AGENTS.md` (fixed in the hub UI) |

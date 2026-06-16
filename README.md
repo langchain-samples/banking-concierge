@@ -17,30 +17,30 @@ The agent's instructions are stored in Context Hub as a versioned `AGENTS.md` an
 
 ```
 src/concierge/
-  graph.py         StateGraph -> agent (LLM) <-> ToolNode
-  app.py           FastAPI custom routes (mounts the React UI at /concierge/)
-  state.py         MessagesState + retrieval_calls counter
-  context.py       Pulls the system prompt (AGENTS.md) from LangSmith Context Hub at runtime
-  context_hub.py   Seeds the hub AGENTS.md + show-only SKILL.md repos
-  prompts.py       Under-specified system prompt — seed pushed to the hub + offline fallback
-  tools.py         search_banking_docs + 4 mocked banking tools
-  retrieval.py     In-memory vector store over kb/*.md
-  mock_data.py     Fake customers, transactions, branches
-  kb/              ~20 synthetic banking FAQ markdown docs
+  graph.py                      StateGraph -> agent (LLM) <-> ToolNode
+  app.py                        FastAPI custom routes (mounts the React UI at /concierge/)
+  state.py                      MessagesState + retrieval_calls counter
+  context.py                    Pulls the system prompt (AGENTS.md) from LangSmith Context Hub at runtime
+  context_hub.py                Seeds the hub AGENTS.md + show-only SKILL.md repos
+  prompts.py                    Under-specified system prompt — seed pushed to the hub + offline fallback
+  tools.py                      search_banking_docs + 4 mocked banking tools
+  retrieval.py                  In-memory vector store over kb/*.md
+  mock_data.py                  Fake customers, transactions, branches
+  kb/                           ~20 synthetic banking FAQ markdown docs
 frontend/
-  src/             React + assistant-ui chat client (Vite + Tailwind v4)
+  src/                          React + assistant-ui chat client (Vite + Tailwind v4)
 scripts/
-  load_generation.py     Runs ~150 mixed conversations against the agent
-  setup_context_hub.py   One-shot: seeds the hub with AGENTS.md + demo skills
+  load_generation.py            Runs ~150 mixed conversations against the agent
+  setup_context_hub.py          One-shot: seeds the hub with AGENTS.md + demo skills
+  teardown_context_hub.py       Delete context hub artifacts  
 evals/
-  golden_dataset.py         Creates the 7-example banking-concierge-golden dataset
-  evaluators.py             LLM judges (hallucination, trajectory) + pii_leak_rate regex check
-  run_experiment.py         aevaluate(...) runner for the golden dataset
-  run_engine_experiment.py  Runner for the Engine datasets (hallucinations / pii)
-  engine_dataset.py         Snapshots the Engine datasets to/from committed JSON (export / restore)
-  engine_dataset.json       Committed snapshot of banking-concierge-hallucinations
-  engine_dataset_pii.json   Committed snapshot of banking-concierge-pii
-langgraph.json       Deployment manifest (graphs + http.app) for LangSmith Cloud
+  evaluators.py                 LLM judges (hallucination, trajectory) + pii_leak_rate regex check
+  run_experiment.py             aevaluate(...) runner; pick golden / pii / hallucinations
+  dataset_snapshot.py           Export / restore datasets to/from committed JSON; pick golden / pii / hallucinations
+  dataset_golden.json           Committed snapshot of banking-concierge-golden
+  dataset_hallucinations.json   Committed snapshot of banking-concierge-hallucinations
+  dataset_pii.json              Committed snapshot of banking-concierge-pii
+langgraph.json                  Deployment manifest (graphs + http.app) for LangSmith Cloud
 ```
 
 ## Setup
@@ -139,15 +139,13 @@ Each run is tagged with `loadgen` and `category:<intent>` so you can verify Engi
 
 ## Create the evaluation datasets
 
-Create these before running any experiment below — they're built deterministically from the repo, so you do **not** have to wait for an Engine scan. The golden dataset is built from code; the two Engine datasets are restored from committed JSON **snapshots** (`evals/engine_dataset.json` → `banking-concierge-hallucinations`, `evals/engine_dataset_pii.json` → `banking-concierge-pii`). `engine_dataset.py` is a small repo-local script wrapping the LangSmith SDK (not a built-in command); `restore` reads the dataset name from inside the snapshot, so it picks the target purely by `--path`.
+Create these before running any experiment below — they're restored deterministically from committed JSON **snapshots** (`evals/dataset_golden.json` → `banking-concierge-golden`, `evals/dataset_hallucinations.json` → `banking-concierge-hallucinations`, `evals/dataset_pii.json` → `banking-concierge-pii`), so you do **not** have to wait for an Engine scan. `dataset_snapshot.py` is a small repo-local script wrapping the LangSmith SDK (not a built-in command); the positional `golden` / `hallucinations` / `pii` picks the dataset name and snapshot file, and `restore` reads the dataset name from inside the snapshot.
 
 ```bash
-# golden (hand-authored in evals/golden_dataset.py)
-uv run python evals/golden_dataset.py --reset
-
-# Engine datasets, restored from committed snapshots (--reset deletes + rebuilds if present)
-uv run python evals/engine_dataset.py restore --reset                                         # hallucinations
-uv run python evals/engine_dataset.py restore --reset --path evals/engine_dataset_pii.json    # pii
+# restore each dataset from its committed snapshot (--reset deletes + rebuilds if present)
+uv run python evals/dataset_snapshot.py restore golden --reset
+uv run python evals/dataset_snapshot.py restore hallucinations --reset
+uv run python evals/dataset_snapshot.py restore pii --reset
 ```
 
 The committed snapshots are the **source of truth for setup**, so a rehearsal or CI run produces identical examples every time — no waiting on a ~20-minute Engine scan.
@@ -155,46 +153,39 @@ The committed snapshots are the **source of truth for setup**, so a rehearsal or
 ## Run the offline experiment (golden dataset)
 
 ```bash
-uv run python evals/run_experiment.py
+uv run python evals/run_experiment.py golden
 ```
 
-This runs `aevaluate` over `banking-concierge-golden`, attaching two LLM-as-judge scores to each run:
+`run_experiment.py` requires the dataset as a positional argument (`golden`, `pii`, or `hallucinations`); each choice selects its dataset name, evaluators, and experiment prefix. This runs `aevaluate` over `banking-concierge-golden`, attaching two LLM-as-judge scores to each run:
 
 - `hallucination` — a local LLM-as-judge (no openevals dependency), given the assistant's final answer plus the retrieved/tool-output context. Scores 1.0 when it detects an ungrounded claim and 0.0 when grounded, so the aggregate reads as a hallucination rate (higher is worse).
 - `trajectory_accuracy` — a local LLM-as-judge (no agentevals dependency) that grades the agent's actual tool-call trajectory against a reference synthesized from the example's `expected_tools`.
 
 ## Engine-issue regression demo
 
-When Engine promotes a failing prod trace into a dataset, the dataset becomes a regression suite for that issue. `evals/run_engine_experiment.py` — a separate runner from the `run_experiment.py` golden-dataset runner above — targets one such dataset (the "agent fabricates specific banking facts" hallucinations dataset by default) and runs an evaluator against it:
+When Engine promotes a failing prod trace into a dataset, the dataset becomes a regression suite for that issue. The same `evals/run_experiment.py` runner targets one such dataset when you pass `hallucinations` or `pii` (the "agent fabricates specific banking facts" dataset and the PII-leak dataset) and runs the matching evaluator against it:
 
 - `hallucination_evaluator` — the aggregate hallucination score used elsewhere, for a single headline number (1.0 = ungrounded, 0.0 = grounded; higher is worse). The PII dataset uses `pii_leak_rate` instead.
 
 Run the baseline for **both** headline issues before applying Engine's fixes:
 
 ```bash
-# hallucinations dataset — uses the defaults (banking-concierge-hallucinations
-# dataset + the hallucination evaluator), so no flags needed
-uv run python evals/run_engine_experiment.py
-
-# pii dataset — needs its own dataset, experiment prefix, and evaluator
-# (the default is hallucination-specific; repeating --evaluator replaces it)
-uv run python evals/run_engine_experiment.py \
-  --dataset banking-concierge-pii \
-  --experiment-prefix banking-concierge-pii-leak \
-  --evaluator pii_leak_rate
+# each positional choice selects its dataset, evaluator, and experiment prefix
+uv run python evals/run_experiment.py hallucinations
+uv run python evals/run_experiment.py pii
 ```
 
 Then apply Engine's fix for each (Context Hub edit for the hallucination, GitHub PR for the PII leak), redeploy, and re-run the **same two commands** — each appears as a new experiment on its dataset. Open the before/after pair side-by-side in LangSmith → Experiments to watch the score improve.
 
 ### Repeatable demo via GitHub Actions
 
-For a repeatable on-stage demo where you don't want to redeploy the agent, `.github/workflows/evals-on-pr.yml` runs `run_engine_experiment.py` on every pull request. The workflow is a strategy matrix over every Engine-generated dataset, so each PR fires one parallel job per dataset (currently `banking-concierge-hallucinations` and `banking-concierge-pii`) and posts a separate PR comment per dataset linking to that experiment. Experiments are tagged with `pr_number`, `commit_sha`, `branch`, `ci_run_id`, and `engine_issue=<alias>`, and prefixed `<issue>-pr-<N>-<sha>` so they're easy to find later.
+For a repeatable on-stage demo where you don't want to redeploy the agent, `.github/workflows/evals-on-pr.yml` runs `run_experiment.py` on every pull request. The workflow is a strategy matrix over every Engine-generated dataset, so each PR fires one parallel job per dataset (currently `banking-concierge-hallucinations` and `banking-concierge-pii`) and posts a separate PR comment per dataset linking to that experiment. Experiments are tagged with `pr_number`, `commit_sha`, `branch`, `ci_run_id`, and `engine_issue=<alias>`, and prefixed `<issue>-pr-<N>-<sha>` so they're easy to find later.
 
 Why run both on every PR: when a PR fixes one issue, the other dataset's result lets you see whether the fix caused unintended cross-impact (improvement, neutral, or regression on the other issue). To add a new dataset, just append an entry to `strategy.matrix.include` in the workflow.
 
 Demo flow:
 
-1. Run the baseline locally on `main` once: `uv run python evals/run_engine_experiment.py`
+1. Run the baseline locally on `main` once: `uv run python evals/run_experiment.py hallucinations`
 2. Engine opens a PR with the proposed fix (or you open one with the fix applied).
 3. The workflow fires automatically, runs the experiment against the PR's code, and comments the LangSmith link on the PR.
 4. In LangSmith → Datasets → `banking-concierge-hallucinations` → Compare, pick the baseline experiment and the PR experiment to show the score improvement without ever shipping the fix.
