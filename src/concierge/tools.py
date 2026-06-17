@@ -17,6 +17,7 @@ from langchain_core.tools import tool
 
 from concierge.mock_data import (
     BRANCHES,
+    BRANCH_VISITS,
     CUSTOMERS,
     TRANSACTIONS,
     find_branch_by_zip,
@@ -87,6 +88,29 @@ def recent_transactions(customer_id: str, limit: int = 5) -> list[dict]:
 
 
 @tool
+def branch_visit_history(customer_id: str, limit: int = 5) -> list[dict]:
+    """Retrieve a customer's most recent in-branch visits.
+
+    Args:
+        customer_id: The customer ID (e.g. CUST-0001).
+        limit: Optional number of visits to return. Defaults to 5.
+    """
+    if limit <= 0:
+        raise ValueError("limit must be positive")
+    if limit > 50:
+        raise ValueError(
+            f"limit {limit} exceeds the maximum of 50. Pick a smaller number."
+        )
+    if customer_id not in CUSTOMERS:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    visits = BRANCH_VISITS.get(customer_id, [])
+    return [dict(v) for v in visits[:limit]]
+
+
+@tool
 def find_branch(zip_code: str) -> dict:
     """Find a Meridian National branch.
 
@@ -133,6 +157,7 @@ TOOLS = [
     search_banking_docs,
     account_lookup,
     recent_transactions,
+    branch_visit_history,
     find_branch,
     transfer_funds,
 ]

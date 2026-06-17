@@ -216,6 +216,35 @@ BRANCHES: list[Branch] = [
 ]
 
 
+BRANCH_VISITS: dict[str, list[dict]] = {
+    "CUST-0001": [
+        {"date": "2026-05-22", "branch_id": "MNB-SF-MARKET", "branch_name": "Meridian National - Market & 5th", "purpose": "deposit", "teller_name": "A. Patel"},
+        {"date": "2026-04-30", "branch_id": "MNB-SF-MARKET", "branch_name": "Meridian National - Market & 5th", "purpose": "notary", "teller_name": "J. Nguyen"},
+        {"date": "2026-03-11", "branch_id": "MNB-SF-EMBARC", "branch_name": "Meridian National - Embarcadero Center", "purpose": "safe_deposit", "teller_name": "M. Alvarez"},
+    ],
+    "CUST-0002": [
+        {"date": "2026-05-18", "branch_id": "MNB-NY-MIDTOWN", "branch_name": "Meridian National - Midtown Manhattan", "purpose": "loan_inquiry", "teller_name": "R. Goldberg"},
+        {"date": "2026-04-02", "branch_id": "MNB-NY-MIDTOWN", "branch_name": "Meridian National - Midtown Manhattan", "purpose": "deposit", "teller_name": "T. Chen"},
+        {"date": "2026-02-14", "branch_id": "MNB-NY-MIDTOWN", "branch_name": "Meridian National - Midtown Manhattan", "purpose": "safe_deposit", "teller_name": "R. Goldberg"},
+    ],
+    "CUST-0003": [
+        {"date": "2026-05-09", "branch_id": "MNB-PA-UNIV", "branch_name": "Meridian National - Palo Alto University Ave", "purpose": "account_opening", "teller_name": "K. Yamada"},
+        {"date": "2026-04-21", "branch_id": "MNB-PA-UNIV", "branch_name": "Meridian National - Palo Alto University Ave", "purpose": "deposit", "teller_name": "K. Yamada"},
+        {"date": "2026-03-30", "branch_id": "MNB-SF-MARKET", "branch_name": "Meridian National - Market & 5th", "purpose": "notary", "teller_name": "A. Patel"},
+    ],
+    "CUST-0004": [
+        {"date": "2026-05-20", "branch_id": "MNB-CLT-UPTOWN", "branch_name": "Meridian National - Charlotte Uptown", "purpose": "safe_deposit", "teller_name": "D. Okafor"},
+        {"date": "2026-05-05", "branch_id": "MNB-CLT-UPTOWN", "branch_name": "Meridian National - Charlotte Uptown", "purpose": "loan_inquiry", "teller_name": "D. Okafor"},
+        {"date": "2026-04-12", "branch_id": "MNB-CHI-WLOOP", "branch_name": "Meridian National - West Loop Chicago", "purpose": "deposit", "teller_name": "S. Kowalski"},
+    ],
+    "CUST-0005": [
+        {"date": "2026-05-15", "branch_id": "MNB-AUS-CONGRESS", "branch_name": "Meridian National - Downtown Austin", "purpose": "deposit", "teller_name": "L. Hernandez"},
+        {"date": "2026-04-08", "branch_id": "MNB-AUS-CONGRESS", "branch_name": "Meridian National - Downtown Austin", "purpose": "notary", "teller_name": "L. Hernandez"},
+        {"date": "2026-03-02", "branch_id": "MNB-AUS-CONGRESS", "branch_name": "Meridian National - Downtown Austin", "purpose": "account_opening", "teller_name": "B. Reyes"},
+    ],
+}
+
+
 def find_branch_by_zip(zip_code: str) -> Branch | None:
     """Return the branch whose zip matches; otherwise the first branch in the same first-3-digit region."""
     for branch in BRANCHES:
