@@ -108,21 +108,39 @@ def find_branch(zip_code: str) -> dict:
 
 
 @tool
-def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
-    """Initiate a transfer between two Meridian National accounts owned by the same customer.
+def transfer_funds(
+    customer_id: str, from_account: str, to_account: str, amount: float
+) -> dict:
+    """Initiate a transfer between two Meridian National accounts owned by the same customer. Call account_lookup first to obtain a verified customer_id and confirm both accounts belong to that customer.
 
     Args:
-        from_account: The source account ID.
-        to_account: The destination account ID.
+        customer_id: The verified CUST-#### identifier for the account holder.
+        from_account: The source account ID (must belong to customer_id).
+        to_account: The destination account ID (must belong to customer_id).
         amount: The dollar amount to transfer.
     """
+    customer = CUSTOMERS.get(customer_id)
+    if customer is None:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    owned = {a["account_id"]: a for a in customer.get("accounts", [])}
+    for acct in (from_account, to_account):
+        if acct not in owned:
+            raise ValueError(
+                f"Account {acct!r} does not belong to customer {customer_id}."
+            )
     if amount <= 0:
         raise ValueError("amount must be positive")
     confirmation = f"MNB-XFER-{abs(hash((from_account, to_account, amount))) % 10_000_000:07d}"
     return {
         "status": "submitted",
+        "customer_id": customer_id,
         "from_account": from_account,
+        "from_account_type": owned[from_account]["type"],
         "to_account": to_account,
+        "to_account_type": owned[to_account]["type"],
         "amount": round(amount, 2),
         "confirmation": confirmation,
         "estimated_post": "immediately",
