@@ -57,8 +57,8 @@ def account_lookup(customer_id: str) -> dict:
     customer = CUSTOMERS.get(customer_id)
     if customer is None:
         raise ValueError(
-            f"No customer found with ID {customer_id!r}. "
-            "Customer IDs are in the format CUST-####."
+            f"No customer exists with ID {customer_id!r}. The ID is well-formed "
+            "but there is no matching account holder on file."
         )
     return dict(customer)
 
@@ -79,8 +79,8 @@ def recent_transactions(customer_id: str, limit: int = 5) -> list[dict]:
         )
     if customer_id not in CUSTOMERS:
         raise ValueError(
-            f"No customer found with ID {customer_id!r}. "
-            "Customer IDs are in the format CUST-####."
+            f"No customer exists with ID {customer_id!r}. The ID is well-formed "
+            "but there is no matching account holder on file."
         )
     txs = TRANSACTIONS.get(customer_id, [])
     return [dict(t) for t in txs[:limit]]
