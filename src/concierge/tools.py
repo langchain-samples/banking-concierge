@@ -60,7 +60,25 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    return _redact_customer(customer)
+
+
+def _redact_customer(customer: dict) -> dict:
+    """Return a copy of a customer record with SSN/card numbers masked and CVVs dropped."""
+    record = dict(customer)
+    if record.get("ssn"):
+        record["ssn"] = "***-**-" + str(record["ssn"])[-4:]
+    if "credit_cards" in record:
+        cards = []
+        for card in record.get("credit_cards", []) or []:
+            masked = dict(card)
+            if masked.get("number"):
+                digits = "".join(ch for ch in str(masked["number"]) if ch.isdigit())
+                masked["number"] = "****-****-****-" + digits[-4:]
+            masked.pop("cvv", None)
+            cards.append(masked)
+        record["credit_cards"] = cards
+    return record
 
 
 @tool
