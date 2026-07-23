@@ -60,7 +60,18 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    safe = dict(customer)
+    ssn = safe.get("ssn")
+    if ssn:
+        safe["ssn"] = f"***-**-{ssn.replace('-', '')[-4:]}"
+    masked_cards = []
+    for card in safe.get("credit_cards", []):
+        digits = "".join(ch for ch in card.get("number", "") if ch.isdigit())
+        masked_cards.append(
+            {"brand": card.get("brand"), "number": f"**** **** **** {digits[-4:]}"}
+        )
+    safe["credit_cards"] = masked_cards
+    return safe
 
 
 @tool
