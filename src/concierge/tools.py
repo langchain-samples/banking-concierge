@@ -7,7 +7,7 @@ to cluster after the load generator runs:
   re-queries multiple times rephrasing
 - account_lookup raises on malformed customer IDs and on IDs prefixed with
   "X" (simulated downstream outage)
-- recent_transactions raises if the model passes a runaway limit
+- recent_transactions clamps a runaway limit to 50 and reports the cap
 - find_branch raises on non-zip inputs
 """
 
@@ -64,7 +64,7 @@ def account_lookup(customer_id: str) -> dict:
 
 
 @tool
-def recent_transactions(customer_id: str, limit: int = 5) -> list[dict]:
+def recent_transactions(customer_id: str, limit: int = 5) -> dict:
     """Retrieve a customer's most recent transactions.
 
     Args:
@@ -73,17 +73,21 @@ def recent_transactions(customer_id: str, limit: int = 5) -> list[dict]:
     """
     if limit <= 0:
         raise ValueError("limit must be positive")
-    if limit > 50:
-        raise ValueError(
-            f"limit {limit} exceeds the maximum of 50. Pick a smaller number."
-        )
     if customer_id not in CUSTOMERS:
         raise ValueError(
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
+    effective_limit = min(limit, 50)
     txs = TRANSACTIONS.get(customer_id, [])
-    return [dict(t) for t in txs[:limit]]
+    rows = [dict(t) for t in txs[:effective_limit]]
+    return {
+        "transactions": rows,
+        "requested_limit": limit,
+        "returned_count": len(rows),
+        "capped": limit > 50,
+        "max_per_call": 50,
+    }
 
 
 @tool
