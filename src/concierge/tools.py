@@ -44,12 +44,7 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 
 @tool
 def account_lookup(customer_id: str) -> dict:
-    """Look up account information.
-
-    Returns the customer's name and a list of their account IDs, account
-    types, and balances. Use this when the user wants details about an
-    account.
-    """
+    """Look up account information; full PII (SSN, card numbers, CVV) is intentionally withheld so unmasked values never reach the model context."""
     if customer_id.startswith("X"):
         raise RuntimeError(
             "Customer record service is temporarily unavailable. Try again later."
@@ -60,7 +55,28 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+
+    def _last4(value: str) -> str:
+        digits = "".join(ch for ch in value if ch.isdigit())
+        return digits[-4:] if len(digits) >= 4 else ""
+
+    masked_cards = [
+        {
+            "brand": card.get("brand"),
+            "last4": _last4(card.get("number", "")),
+            "exp": card.get("exp"),
+        }
+        for card in customer.get("credit_cards", [])
+    ]
+    return {
+        "customer_id": customer["customer_id"],
+        "name": customer["name"],
+        "ssn_last4": _last4(customer.get("ssn", "")),
+        "phone": customer.get("phone"),
+        "email": customer.get("email"),
+        "credit_cards": masked_cards,
+        "accounts": [dict(a) for a in customer.get("accounts", [])],
+    }
 
 
 @tool
