@@ -13,6 +13,7 @@ import os
 
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -32,6 +33,8 @@ SYSTEM_PROMPT = get_prompt()
 def _make_model() -> ChatOpenAI:
     model_name = os.getenv("CONCIERGE_MODEL", "gpt-4o-mini")
     base_url = os.getenv("BASE_URL")
+    # Tag LLM spans with provider/model so LangSmith populates total_cost.
+    ls_metadata = {"ls_provider": "openai", "ls_model_name": model_name}
     if base_url:
         # Route through the LangSmith LLM Gateway: callers authenticate with
         # their LangSmith API key; provider keys live in Provider Secrets.
@@ -40,17 +43,46 @@ def _make_model() -> ChatOpenAI:
             temperature=0.2,
             base_url=base_url,
             api_key=os.environ["LANGSMITH_API_KEY"],
+            metadata=ls_metadata,
         )
     else:
-        client = ChatOpenAI(model=model_name, temperature=0.2)
+        client = ChatOpenAI(
+            model=model_name,
+            temperature=0.2,
+            metadata=ls_metadata,
+        )
     return client.bind_tools(TOOLS)
 
 
-def agent_node(state: ConciergeState) -> dict:
+def _run_metadata(state: ConciergeState, config: RunnableConfig) -> dict:
+    """Resolve thread/user/environment metadata for the root run."""
+    configurable = config.get("configurable") or {}
+    incoming = config.get("metadata") or {}
+    thread_id = (
+        state.get("conversation_id")
+        or configurable.get("thread_id")
+        or incoming.get("thread_id")
+    )
+    user_id = (
+        state.get("rep_id")
+        or configurable.get("user_id")
+        or incoming.get("user_id")
+    )
+    return {
+        "thread_id": thread_id,
+        "user_id": user_id,
+        "environment": os.getenv("CONCIERGE_ENV", "production"),
+    }
+
+
+def agent_node(state: ConciergeState, config: RunnableConfig) -> dict:
     """Call the LLM with the message history plus the system prompt."""
     model = _make_model()
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
-    response = model.invoke(messages)
+    response = model.invoke(
+        messages,
+        config={"metadata": _run_metadata(state, config)},
+    )
 
     retrieval_calls = state.get("retrieval_calls", 0)
     tool_calls = getattr(response, "tool_calls", None) or []
