@@ -60,7 +60,23 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    record = dict(customer)
+    ssn = record.get("ssn")
+    if ssn:
+        digits = "".join(ch for ch in ssn if ch.isdigit())
+        record["ssn"] = f"***-**-{digits[-4:]}" if len(digits) >= 4 else "***-**-****"
+    masked_cards = []
+    for card in record.get("credit_cards", []):
+        number = "".join(ch for ch in str(card.get("number", "")) if ch.isdigit())
+        masked_cards.append(
+            {
+                "brand": card.get("brand"),
+                "last4": number[-4:] if len(number) >= 4 else None,
+                "exp": card.get("exp"),
+            }
+        )
+    record["credit_cards"] = masked_cards
+    return record
 
 
 @tool
