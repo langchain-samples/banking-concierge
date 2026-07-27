@@ -60,7 +60,27 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+
+    def _mask_tail(value: str, keep: int = 4) -> str:
+        digits = "".join(ch for ch in str(value) if ch.isdigit())
+        return f"****{digits[-keep:]}" if len(digits) >= keep else "****"
+
+    return {
+        "customer_id": customer.get("customer_id"),
+        "name": customer.get("name"),
+        "phone": customer.get("phone"),
+        "email": customer.get("email"),
+        "ssn_last4": _mask_tail(customer.get("ssn", "")),
+        "credit_cards": [
+            {
+                "brand": card.get("brand"),
+                "number_last4": _mask_tail(card.get("number", "")),
+                "exp": card.get("exp"),
+            }
+            for card in customer.get("credit_cards", [])
+        ],
+        "accounts": customer.get("accounts", []),
+    }
 
 
 @tool
