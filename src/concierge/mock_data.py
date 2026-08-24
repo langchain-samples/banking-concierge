@@ -22,6 +22,14 @@ class Transaction(TypedDict):
     type: str
 
 
+class BranchVisit(TypedDict):
+    date: str
+    branch_name: str
+    city: str
+    state: str
+    interaction: str
+
+
 class Branch(TypedDict):
     name: str
     address: str
@@ -214,6 +222,33 @@ BRANCHES: list[Branch] = [
         "hours": "Mon-Fri 9am-5pm",
     },
 ]
+
+
+BRANCH_VISITS: dict[str, list[BranchVisit]] = {
+    "CUST-0001": [
+        {"date": "2026-05-17", "branch_name": "Meridian National - Market & 5th", "city": "San Francisco", "state": "CA", "interaction": "teller withdrawal"},
+        {"date": "2026-04-28", "branch_name": "Meridian National - Embarcadero Center", "city": "San Francisco", "state": "CA", "interaction": "account servicing"},
+        {"date": "2026-03-11", "branch_name": "Meridian National - Market & 5th", "city": "San Francisco", "state": "CA", "interaction": "cashier's check"},
+    ],
+    "CUST-0002": [
+        {"date": "2026-05-14", "branch_name": "Meridian National - Midtown Manhattan", "city": "New York", "state": "NY", "interaction": "safe deposit"},
+        {"date": "2026-04-02", "branch_name": "Meridian National - Midtown Manhattan", "city": "New York", "state": "NY", "interaction": "wire transfer request"},
+        {"date": "2026-02-19", "branch_name": "Meridian National - West Loop Chicago", "city": "Chicago", "state": "IL", "interaction": "account servicing"},
+    ],
+    "CUST-0003": [
+        {"date": "2026-05-06", "branch_name": "Meridian National - Palo Alto University Ave", "city": "Palo Alto", "state": "CA", "interaction": "teller deposit"},
+        {"date": "2026-01-23", "branch_name": "Meridian National - Palo Alto University Ave", "city": "Palo Alto", "state": "CA", "interaction": "account servicing"},
+    ],
+    "CUST-0004": [
+        {"date": "2026-05-18", "branch_name": "Meridian National - Charlotte Uptown", "city": "Charlotte", "state": "NC", "interaction": "wealth advisor meeting"},
+        {"date": "2026-05-04", "branch_name": "Meridian National - Charlotte Uptown", "city": "Charlotte", "state": "NC", "interaction": "safe deposit"},
+        {"date": "2026-03-30", "branch_name": "Meridian National - Midtown Manhattan", "city": "New York", "state": "NY", "interaction": "account servicing"},
+    ],
+    "CUST-0005": [
+        {"date": "2026-05-12", "branch_name": "Meridian National - Downtown Austin", "city": "Austin", "state": "TX", "interaction": "teller withdrawal"},
+        {"date": "2026-04-09", "branch_name": "Meridian National - Downtown Austin", "city": "Austin", "state": "TX", "interaction": "account servicing"},
+    ],
+}
 
 
 def find_branch_by_zip(zip_code: str) -> Branch | None:
