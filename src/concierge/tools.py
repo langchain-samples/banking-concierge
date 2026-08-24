@@ -9,9 +9,16 @@ to cluster after the load generator runs:
   "X" (simulated downstream outage)
 - recent_transactions raises if the model passes a runaway limit
 - find_branch raises on non-zip inputs
+
+Raw SSNs, full card numbers (PANs) and CVVs must never be returned to the
+model: once they enter the context they can be rendered into a reply. Tools
+that touch customer records return masked projections only, and identity
+checks go through verify_identity_field, which answers with a boolean.
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 from langchain_core.tools import tool
 
@@ -42,13 +49,22 @@ def search_banking_docs(query: str, k: int = 4) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
+def _digits(value: str) -> str:
+    return "".join(c for c in value if c.isdigit())
+
+
+def _last4(value: str) -> str:
+    return _digits(value)[-4:]
+
+
 @tool
 def account_lookup(customer_id: str) -> dict:
     """Look up account information.
 
-    Returns the customer's name and a list of their account IDs, account
-    types, and balances. Use this when the user wants details about an
-    account.
+    Returns the customer's name, contact details, masked identifiers
+    (SSN last four, card brand / last four / expiry), and a list of their
+    account IDs, account types, and balances. Use this when the user wants
+    details about an account.
     """
     if customer_id.startswith("X"):
         raise RuntimeError(
@@ -60,7 +76,56 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    return {
+        "customer_id": customer["customer_id"],
+        "name": customer["name"],
+        "ssn_last4": _last4(customer["ssn"]),
+        "phone": customer["phone"],
+        "email": customer["email"],
+        "credit_cards": [
+            {
+                "brand": card["brand"],
+                "last4": _last4(card["number"]),
+                "exp": card["exp"],
+            }
+            for card in customer["credit_cards"]
+        ],
+        "accounts": [dict(account) for account in customer["accounts"]],
+    }
+
+
+@tool
+def verify_identity_field(
+    customer_id: str,
+    field: Literal["ssn_last4", "card_last4", "phone", "email"],
+    value: str,
+) -> dict:
+    """Check a value the caller supplied against the record without disclosing it.
+
+    Args:
+        customer_id: The customer ID (e.g. CUST-0001).
+        field: Which identifier to check.
+        value: The value the caller provided.
+    """
+    customer = CUSTOMERS.get(customer_id)
+    if customer is None:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    supplied = value.strip()
+    if field == "ssn_last4":
+        match = _digits(supplied) == _last4(customer["ssn"])
+    elif field == "card_last4":
+        match = any(
+            _digits(supplied) == _last4(card["number"])
+            for card in customer["credit_cards"]
+        )
+    elif field == "phone":
+        match = _digits(supplied) == _digits(customer["phone"])
+    else:
+        match = supplied.casefold() == customer["email"].casefold()
+    return {"field": field, "match": match}
 
 
 @tool
@@ -132,6 +197,7 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 TOOLS = [
     search_banking_docs,
     account_lookup,
+    verify_identity_field,
     recent_transactions,
     find_branch,
     transfer_funds,
