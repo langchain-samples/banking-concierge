@@ -24,6 +24,17 @@ from concierge.mock_data import (
 from concierge.retrieval import retrieve
 
 
+def _digits(value: str) -> str:
+    """Return only the digit characters of ``value``."""
+    return "".join(c for c in value if c.isdigit())
+
+
+def _mask_phone(phone: str) -> str:
+    """Return ``phone`` with everything but the last four digits masked."""
+    digits = _digits(phone)
+    return f"***-***-{digits[-4:]}" if len(digits) >= 4 else "***"
+
+
 @tool
 def search_banking_docs(query: str, k: int = 4) -> str:
     """Search Meridian National banking documentation.
@@ -43,12 +54,96 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 
 
 @tool
+def find_customer(
+    ssn: str | None = None,
+    phone: str | None = None,
+    email: str | None = None,
+    card_last4: str | None = None,
+    account_id: str | None = None,
+) -> dict:
+    """Resolve an account holder's customer ID from an identifier the representative already has.
+
+    Supply at least one of the lookup keys below; every key supplied must
+    match. Returns candidate matches whose ``customer_id`` is what you then
+    pass to account_lookup or recent_transactions.
+
+    Args:
+        ssn: The account holder's Social Security number, with or without dashes.
+        phone: A phone number on file, in any format.
+        email: An email address on file.
+        card_last4: The last four digits of a credit card on file.
+        account_id: A bare account number (e.g. 1234), not a customer ID.
+    """
+    ssn, phone, email, card_last4, account_id = (
+        value if value and value.strip() else None
+        for value in (ssn, phone, email, card_last4, account_id)
+    )
+    criteria = {
+        "ssn": ssn,
+        "phone": phone,
+        "email": email,
+        "card_last4": card_last4,
+        "account_id": account_id,
+    }
+    if all(value is None for value in criteria.values()):
+        raise ValueError(
+            "find_customer needs at least one of: "
+            f"{', '.join(criteria)}."
+        )
+
+    matches = []
+    for customer in CUSTOMERS.values():
+        if ssn is not None and _digits(ssn) != _digits(customer["ssn"]):
+            continue
+        if phone is not None and _digits(phone) != _digits(customer["phone"]):
+            continue
+        if email is not None and email.strip().lower() != customer["email"].lower():
+            continue
+        if card_last4 is not None and not any(
+            _digits(card["number"]).endswith(_digits(card_last4))
+            for card in customer["credit_cards"]
+        ):
+            continue
+        if account_id is not None and not any(
+            account["account_id"] == account_id.strip()
+            for account in customer["accounts"]
+        ):
+            continue
+        matches.append(
+            {
+                "customer_id": customer["customer_id"],
+                "name": customer["name"],
+                "masked_phone": _mask_phone(customer["phone"]),
+                "accounts": [
+                    {"account_id": a["account_id"], "type": a["type"]}
+                    for a in customer["accounts"]
+                ],
+            }
+        )
+
+    if not matches:
+        return {
+            "matches": [],
+            "count": 0,
+            "message": "No account holder matched those details.",
+        }
+    return {"matches": matches, "count": len(matches)}
+
+
+@tool
 def account_lookup(customer_id: str) -> dict:
     """Look up account information.
 
     Returns the customer's name and a list of their account IDs, account
     types, and balances. Use this when the user wants details about an
     account.
+
+    Args:
+        customer_id: The account holder's customer ID, which MUST be in the
+            format CUST-#### (e.g. CUST-0001). This is the only accepted
+            lookup key — do not pass an SSN, phone number, card number,
+            account number, or name. If you only have one of those, call
+            find_customer first to resolve the customer ID.
     """
     if customer_id.startswith("X"):
         raise RuntimeError(
@@ -131,6 +226,7 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 
 TOOLS = [
     search_banking_docs,
+    find_customer,
     account_lookup,
     recent_transactions,
     find_branch,
