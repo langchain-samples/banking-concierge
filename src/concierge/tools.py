@@ -32,7 +32,14 @@ def search_banking_docs(query: str, k: int = 4) -> str:
         query: A natural-language search query.
         k: Number of relevant chunks to return. Defaults to 4.
     """
-    chunks = retrieve(query, k=k)
+    try:
+        chunks = retrieve(query, k=k)
+    except Exception as exc:
+        detail = f"{type(exc).__name__}: {exc}".splitlines()[0][:200]
+        return (
+            "RETRIEVAL_UNAVAILABLE: the banking documentation index could not "
+            f"be queried ({detail}). No documentation was searched."
+        )
     if not chunks:
         return "No relevant documentation found."
     blocks = []

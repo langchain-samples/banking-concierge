@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -13,14 +14,21 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 KB_DIR = Path(__file__).parent / "kb"
 
+logger = logging.getLogger(__name__)
+
 
 def _make_embeddings() -> OpenAIEmbeddings:
-    """Create an OpenAIEmbeddings instance."""
-    base_url = os.getenv("BASE_URL")
+    """Create an OpenAIEmbeddings instance pinned to the OpenAI API."""
+    # Embeddings must go directly to OpenAI. The LangSmith gateway only
+    # allow-lists chat completions, not /embeddings, so when BASE_URL /
+    # OPENAI_BASE_URL point at the gateway (as they do for the chat model in
+    # graph.py) an embeddings client that inherits them gets a 404 for the
+    # missing text-embedding-3-small deployment. LANGSMITH_API_KEY is a gateway
+    # credential and must never be passed as the OpenAI api_key here.
     return OpenAIEmbeddings(
         model="text-embedding-3-small",
-        base_url=base_url,
-        api_key=os.environ["LANGSMITH_API_KEY"],
+        base_url="https://api.openai.com/v1",
+        api_key=os.environ["OPENAI_API_KEY"],
     )
 
 
@@ -42,8 +50,14 @@ def get_vector_store() -> InMemoryVectorStore:
     docs = _load_kb_documents()
     splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=80)
     chunks = splitter.split_documents(docs)
-    embeddings = _make_embeddings()
-    return InMemoryVectorStore.from_documents(chunks, embeddings)
+    # lru_cache only stores successful returns, so re-raising here leaves the
+    # cache empty and a later call retries once credentials are fixed.
+    try:
+        embeddings = _make_embeddings()
+        return InMemoryVectorStore.from_documents(chunks, embeddings)
+    except Exception:
+        logger.exception("Failed to build the banking documentation index")
+        raise
 
 
 def retrieve(query: str, k: int = 4) -> list[Document]:
