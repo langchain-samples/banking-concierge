@@ -19,9 +19,29 @@ from concierge.mock_data import (
     BRANCHES,
     CUSTOMERS,
     TRANSACTIONS,
+    Customer,
     find_branch_by_zip,
 )
 from concierge.retrieval import retrieve
+
+
+def _last4(value: str) -> str:
+    return "".join(ch for ch in value if ch.isdigit())[-4:]
+
+
+def _redact_customer(customer: Customer) -> dict:
+    """Project a customer record down to fields safe to put in model context."""
+    redacted = {k: v for k, v in customer.items() if k not in ("ssn", "credit_cards")}
+    redacted["ssn_last4"] = _last4(customer["ssn"])
+    redacted["credit_cards"] = [
+        {
+            "brand": card["brand"],
+            "exp": card["exp"],
+            "last4": _last4(card["number"]),
+        }
+        for card in customer["credit_cards"]
+    ]
+    return redacted
 
 
 @tool
@@ -46,8 +66,10 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 def account_lookup(customer_id: str) -> dict:
     """Look up account information.
 
-    Returns the customer's name and a list of their account IDs, account
-    types, and balances. Use this when the user wants details about an
+    Returns the customer's name, contact details, account IDs, account types,
+    and balances. Sensitive identifiers are returned only as last-four digits
+    (``ssn_last4``, ``credit_cards[].last4``); full SSNs, full card numbers,
+    and CVVs are never returned. Use this when the user wants details about an
     account.
     """
     if customer_id.startswith("X"):
@@ -60,7 +82,7 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    return _redact_customer(customer)
 
 
 @tool

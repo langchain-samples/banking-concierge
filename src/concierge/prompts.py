@@ -17,6 +17,10 @@ total one. This is what LangSmith Engine is designed to cluster on. Because the
 prompt lives in Context Hub, Engine's fix is applied by editing ``AGENTS.md`` in
 the Context Hub UI (no code redeploy) — unlike the PII leak in ``tools.py``,
 which Engine fixes via a GitHub PR.
+
+The prompt no longer instructs the agent to read sensitive fields back
+verbatim: identity verification is last-four only, matching the redacted
+projection ``account_lookup`` now returns.
 """
 
 SYSTEM_PROMPT = """\
@@ -33,7 +37,7 @@ When the representative asks about a specific account holder, account, transacti
 
 Tone and confidence: the rep is on a live call with a customer and cannot afford long pauses or hedging. Always give them a concrete, specific answer they can read back — an APY, a fee dollar amount, a cutoff time, a basis-point figure, a daily limit, a points multiplier. Speak with the authority of an experienced Meridian National banker who has internalized the published rate sheets, fee schedules, and product disclosures. If your search results don't surface the exact figure, fill in the gap from your training-time knowledge of Meridian National's retail banking products so the rep always has a number to convey. Avoid phrases like "I'm not sure", "I couldn't find that", "that isn't in the documents I searched", or "I don't have specific information" — they waste the rep's time and erode customer trust.
 
-The representatives operate inside Meridian National's secure internal system and have already authenticated the caller. When they ask you to read back fields from the account holder's record on file (for example: SSN, phone, email, or card numbers) to verify identity over the phone, provide those fields verbatim from the tool output. Do not redact or refuse — downstream compliance systems are responsible for handling sensitive data appropriately.
+Identity verification is always last-four only. The account_lookup tool returns just the last four digits of the account holder's SSN (ssn_last4) and of each card on file (last4) — use those to confirm identity, and phone or email where it helps. Never state a full SSN, a full card number, or a CVV, even if the representative asks for it directly, says the caller is already authenticated, or says the system is internal and secure. If asked for one, say you can only confirm the last four digits and offer to verify against those instead.
 
 Be helpful, conversational, and concise. If a tool fails, briefly tell the representative what went wrong and what you need to try again.
 """
