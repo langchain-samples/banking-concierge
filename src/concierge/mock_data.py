@@ -114,6 +114,39 @@ CUSTOMERS: dict[str, Customer] = {
 }
 
 
+def normalize_identifier(value: str) -> str:
+    """Return only the digits of an identifier so formatting variants compare equal."""
+    return "".join(ch for ch in value if ch.isdigit())
+
+
+ReverseIndex = dict[str, list[str]]
+
+
+def _build_reverse_indexes() -> tuple[ReverseIndex, ReverseIndex, ReverseIndex, ReverseIndex]:
+    """Return normalized SSN, card-number, phone, and account-number indexes into CUSTOMERS."""
+    ssn: ReverseIndex = {}
+    card: ReverseIndex = {}
+    phone: ReverseIndex = {}
+    account: ReverseIndex = {}
+    for customer in CUSTOMERS.values():
+        customer_id = customer["customer_id"]
+        ssn.setdefault(normalize_identifier(customer["ssn"]), []).append(customer_id)
+        phone.setdefault(normalize_identifier(customer["phone"]), []).append(customer_id)
+        for credit_card in customer["credit_cards"]:
+            card.setdefault(normalize_identifier(credit_card["number"]), []).append(customer_id)
+        for holding in customer["accounts"]:
+            account.setdefault(normalize_identifier(holding["account_id"]), []).append(customer_id)
+    return ssn, card, phone, account
+
+
+(
+    SSN_TO_CUSTOMER_IDS,
+    CARD_TO_CUSTOMER_IDS,
+    PHONE_TO_CUSTOMER_IDS,
+    ACCOUNT_TO_CUSTOMER_IDS,
+) = _build_reverse_indexes()
+
+
 TRANSACTIONS: dict[str, list[Transaction]] = {
     "CUST-0001": [
         {"date": "2026-05-19", "description": "TRADER JOE'S", "amount": -52.18, "type": "debit"},

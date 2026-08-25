@@ -16,10 +16,15 @@ from __future__ import annotations
 from langchain_core.tools import tool
 
 from concierge.mock_data import (
+    ACCOUNT_TO_CUSTOMER_IDS,
     BRANCHES,
+    CARD_TO_CUSTOMER_IDS,
     CUSTOMERS,
+    PHONE_TO_CUSTOMER_IDS,
+    SSN_TO_CUSTOMER_IDS,
     TRANSACTIONS,
     find_branch_by_zip,
+    normalize_identifier,
 )
 from concierge.retrieval import retrieve
 
@@ -43,12 +48,66 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 
 
 @tool
+def find_customer(
+    ssn: str | None = None,
+    card_number: str | None = None,
+    phone: str | None = None,
+    account_id: str | None = None,
+) -> dict:
+    """Resolve an account holder's CUST-#### customer ID from an alternate identifier when the representative does not have the customer ID."""
+    lookups = (
+        (ssn, SSN_TO_CUSTOMER_IDS),
+        (card_number, CARD_TO_CUSTOMER_IDS),
+        (phone, PHONE_TO_CUSTOMER_IDS),
+        (account_id, ACCOUNT_TO_CUSTOMER_IDS),
+    )
+    provided = False
+    matches: set[str] = set()
+    for value, index in lookups:
+        if not value:
+            continue
+        provided = True
+        matches.update(index.get(normalize_identifier(value), []))
+
+    if not provided:
+        return {
+            "match": False,
+            "message": "Provide at least one of ssn, card_number, phone, or account_id.",
+        }
+    if not matches:
+        return {
+            "match": False,
+            "message": "No account holder on file matches that identifier. "
+            "Ask the representative for the customer ID (format CUST-####).",
+        }
+    if len(matches) > 1:
+        return {
+            "match": False,
+            "ambiguous": True,
+            "customer_ids": sorted(matches),
+            "message": "More than one account holder matches. Ask the representative "
+            "for the customer ID (format CUST-####) to disambiguate.",
+        }
+    customer_id = matches.pop()
+    return {
+        "match": True,
+        "customer_id": customer_id,
+        "name": CUSTOMERS[customer_id]["name"],
+    }
+
+
+@tool
 def account_lookup(customer_id: str) -> dict:
     """Look up account information.
 
     Returns the customer's name and a list of their account IDs, account
     types, and balances. Use this when the user wants details about an
     account.
+
+    Args:
+        customer_id: The customer ID, which must be in the CUST-#### format.
+            SSNs, card numbers, phone numbers, and bare account numbers are
+            not accepted here — resolve them with find_customer first.
     """
     if customer_id.startswith("X"):
         raise RuntimeError(
@@ -131,6 +190,7 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 
 TOOLS = [
     search_banking_docs,
+    find_customer,
     account_lookup,
     recent_transactions,
     find_branch,
