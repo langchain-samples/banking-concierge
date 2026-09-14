@@ -22,6 +22,13 @@ class Transaction(TypedDict):
     type: str
 
 
+class BranchVisit(TypedDict):
+    date: str
+    branch_zip: str
+    branch_name: str
+    purpose: str
+
+
 class Branch(TypedDict):
     name: str
     address: str
@@ -214,6 +221,30 @@ BRANCHES: list[Branch] = [
         "hours": "Mon-Fri 9am-5pm",
     },
 ]
+
+
+# Visits are stored newest-first per customer. CUST-0003 has no recorded
+# visits on purpose so the "customer exists, no visits" path stays exercised.
+BRANCH_VISITS: dict[str, list[BranchVisit]] = {
+    "CUST-0001": [
+        {"date": "2026-05-16", "branch_zip": "94103", "branch_name": "Meridian National - Market & 5th", "purpose": "Cashier's check"},
+        {"date": "2026-04-28", "branch_zip": "94111", "branch_name": "Meridian National - Embarcadero Center", "purpose": "Notary service"},
+        {"date": "2026-03-02", "branch_zip": "94103", "branch_name": "Meridian National - Market & 5th", "purpose": "Debit card replacement"},
+    ],
+    "CUST-0002": [
+        {"date": "2026-05-11", "branch_zip": "10017", "branch_name": "Meridian National - Midtown Manhattan", "purpose": "Mortgage document drop-off"},
+        {"date": "2026-02-19", "branch_zip": "10017", "branch_name": "Meridian National - Midtown Manhattan", "purpose": "Safe deposit box access"},
+    ],
+    "CUST-0004": [
+        {"date": "2026-05-18", "branch_zip": "28202", "branch_name": "Meridian National - Charlotte Uptown", "purpose": "Wire transfer authorization"},
+        {"date": "2026-05-04", "branch_zip": "28202", "branch_name": "Meridian National - Charlotte Uptown", "purpose": "Meeting with private banker"},
+        {"date": "2026-01-09", "branch_zip": "94301", "branch_name": "Meridian National - Palo Alto University Ave", "purpose": "Account signer update"},
+    ],
+    "CUST-0005": [
+        {"date": "2026-05-12", "branch_zip": "78701", "branch_name": "Meridian National - Downtown Austin", "purpose": "Overdraft fee discussion"},
+        {"date": "2026-04-03", "branch_zip": "78701", "branch_name": "Meridian National - Downtown Austin", "purpose": "Deposited a paper check"},
+    ],
+}
 
 
 def find_branch_by_zip(zip_code: str) -> Branch | None:

@@ -13,9 +13,12 @@ to cluster after the load generator runs:
 
 from __future__ import annotations
 
+import re
+
 from langchain_core.tools import tool
 
 from concierge.mock_data import (
+    BRANCH_VISITS,
     BRANCHES,
     CUSTOMERS,
     TRANSACTIONS,
@@ -108,6 +111,43 @@ def find_branch(zip_code: str) -> dict:
 
 
 @tool
+def branch_visits(customer_id: str, limit: int = 5) -> dict:
+    """Retrieve an account holder's in-person branch visit history, newest first.
+
+    This is the right tool for questions like "when did the customer last come
+    into a branch" or "show me their most recent branch visit". It is not the
+    same as find_branch, which is a ZIP-code lookup against the public branch
+    directory and holds no per-customer visit log.
+
+    Args:
+        customer_id: The customer ID (e.g. CUST-0001).
+        limit: Optional number of visits to return.
+    """
+    if limit <= 0:
+        raise ValueError("limit must be positive")
+    if not re.fullmatch(r"CUST-\d{4}", customer_id):
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    if customer_id not in CUSTOMERS:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    visits = sorted(
+        BRANCH_VISITS.get(customer_id, []), key=lambda v: v["date"], reverse=True
+    )
+    if not visits:
+        return {
+            "customer_id": customer_id,
+            "visits": [],
+            "message": "No in-person branch visits are on record for this customer.",
+        }
+    return {"customer_id": customer_id, "visits": [dict(v) for v in visits[:limit]]}
+
+
+@tool
 def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
     """Initiate a transfer between two Meridian National accounts owned by the same customer.
 
@@ -134,5 +174,6 @@ TOOLS = [
     account_lookup,
     recent_transactions,
     find_branch,
+    branch_visits,
     transfer_funds,
 ]
