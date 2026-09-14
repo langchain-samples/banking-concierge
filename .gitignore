@@ -4,6 +4,10 @@ __pycache__/
 build/
 dist/
 wheels/
+# ...but the built frontend bundle must ship in the deployment image.
+# `langgraph deploy` filters its upload with THIS file only (nested
+# .gitignore files are not read), so the negation has to live here.
+!frontend/dist/
 *.egg-info
 
 # Virtual environments
