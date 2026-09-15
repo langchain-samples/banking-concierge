@@ -46,6 +46,9 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 def account_lookup(customer_id: str) -> dict:
     """Look up account information.
 
+    Args:
+        customer_id: The customer's ID in the format CUST-#### (e.g. CUST-0001). SSNs, phone numbers, names, email addresses and account numbers are NOT valid values for this argument.
+
     Returns the customer's name and a list of their account IDs, account
     types, and balances. Use this when the user wants details about an
     account.
@@ -57,7 +60,7 @@ def account_lookup(customer_id: str) -> dict:
     customer = CUSTOMERS.get(customer_id)
     if customer is None:
         raise ValueError(
-            f"No customer found with ID {customer_id!r}. "
+            "No customer found for the supplied identifier. "
             "Customer IDs are in the format CUST-####."
         )
     return dict(customer)
