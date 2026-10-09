@@ -76,7 +76,7 @@ def _build_graph():
         {"tools": "tools", END: END},
     )
     builder.add_edge("tools", "agent")
-    return builder.compile()
+    return builder.compile(name="banking-concierge")
 
 
 graph = _build_graph()
