@@ -44,12 +44,7 @@ def search_banking_docs(query: str, k: int = 4) -> str:
 
 @tool
 def account_lookup(customer_id: str) -> dict:
-    """Look up account information.
-
-    Returns the customer's name and a list of their account IDs, account
-    types, and balances. Use this when the user wants details about an
-    account.
-    """
+    """Look up a customer's name, contact info, accounts, SSN last four, and cards (brand, last four, expiration only)."""
     if customer_id.startswith("X"):
         raise RuntimeError(
             "Customer record service is temporarily unavailable. Try again later."
@@ -60,7 +55,47 @@ def account_lookup(customer_id: str) -> dict:
             f"No customer found with ID {customer_id!r}. "
             "Customer IDs are in the format CUST-####."
         )
-    return dict(customer)
+    return {
+        "customer_id": customer["customer_id"],
+        "name": customer["name"],
+        "ssn_last4": _last4(customer["ssn"]),
+        "phone": customer["phone"],
+        "email": customer["email"],
+        "credit_cards": [
+            {"brand": card["brand"], "last4": _last4(card["number"]), "exp": card["exp"]}
+            for card in customer["credit_cards"]
+        ],
+        "accounts": [dict(account) for account in customer["accounts"]],
+    }
+
+
+@tool
+def verify_identity(
+    customer_id: str, ssn_last4: str | None = None, card_last4: str | None = None
+) -> dict:
+    """Check caller-supplied SSN and/or card last-four digits against the record on file and return only match results."""
+    customer = CUSTOMERS.get(customer_id)
+    if customer is None:
+        raise ValueError(
+            f"No customer found with ID {customer_id!r}. "
+            "Customer IDs are in the format CUST-####."
+        )
+    return {
+        "customer_id": customer_id,
+        "ssn_last4_match": None
+        if ssn_last4 is None
+        else _last4(ssn_last4) == _last4(customer["ssn"]),
+        "card_last4_match": None
+        if card_last4 is None
+        else any(
+            _last4(card_last4) == _last4(card["number"])
+            for card in customer["credit_cards"]
+        ),
+    }
+
+
+def _last4(value: str) -> str:
+    return "".join(ch for ch in value if ch.isdigit())[-4:]
 
 
 @tool
@@ -132,6 +167,7 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 TOOLS = [
     search_banking_docs,
     account_lookup,
+    verify_identity,
     recent_transactions,
     find_branch,
     transfer_funds,

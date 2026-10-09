@@ -23,7 +23,7 @@ src/concierge/
   context.py                    Pulls the system prompt (AGENTS.md) from LangSmith Context Hub at runtime
   context_hub.py                Seeds the hub AGENTS.md + show-only SKILL.md repos
   prompts.py                    Under-specified system prompt — seed pushed to the hub + offline fallback
-  tools.py                      search_banking_docs + 4 mocked banking tools
+  tools.py                      search_banking_docs + 5 mocked banking tools
   retrieval.py                  In-memory vector store over kb/*.md
   mock_data.py                  Fake customers, transactions, branches
   kb/                           ~20 synthetic banking FAQ markdown docs
