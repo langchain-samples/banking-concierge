@@ -1,7 +1,7 @@
 """LangSmith Context Hub setup-time helpers for the banking-concierge demo.
 
 ``push_agents_md()`` is called once by ``scripts/setup_context_hub.py`` to seed
-Context Hub with the initial ``AGENTS.md`` (the buggy, hallucination-prone
+Context Hub with the initial ``AGENTS.md`` (the documentation-grounded
 system prompt from ``concierge.prompts.SYSTEM_PROMPT``) and promote that commit
 to the ``production`` environment tag. The runtime pulls ``:production`` (see
 ``concierge.context.get_prompt``), so this gives the demo a hub-driven baseline;
@@ -90,7 +90,7 @@ def push_agents_md() -> None:
             "repo_type": "agent",
             "source": "internal",
             "is_public": False,
-            "description": "Meridian National concierge agent instructions (buggy, for Engine demo)",
+            "description": "Meridian National concierge agent instructions",
         },
     )
 
