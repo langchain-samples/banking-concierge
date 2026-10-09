@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 
+import langsmith
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
@@ -18,10 +19,15 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from concierge.context import get_prompt
+from concierge.redaction import redact_messages, trace_anonymizer
 from concierge.state import ConciergeState
 from concierge.tools import TOOLS
 
 load_dotenv(override=True)
+
+# Mask rep-pasted SSNs / card numbers / CVVs in every trace this process
+# sends, including graph-level inputs that hold the raw human turn.
+langsmith.configure(client=langsmith.Client(anonymizer=trace_anonymizer))
 
 # The system prompt (AGENTS.md) is pulled from LangSmith Context Hub at module
 # import; a hub edit is picked up on the next process start. Falls back to the
@@ -47,9 +53,10 @@ def _make_model() -> ChatOpenAI:
 
 
 def agent_node(state: ConciergeState) -> dict:
-    """Call the LLM with the message history plus the system prompt."""
+    """Call the LLM with redacted message history plus the system prompt."""
     model = _make_model()
-    messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
+    conversation, pii_map = redact_messages(state["messages"], state.get("pii_map"))
+    messages = [SystemMessage(content=SYSTEM_PROMPT), *conversation]
     response = model.invoke(messages)
 
     retrieval_calls = state.get("retrieval_calls", 0)
@@ -61,6 +68,7 @@ def agent_node(state: ConciergeState) -> dict:
     return {
         "messages": [response],
         "retrieval_calls": retrieval_calls + new_retrievals,
+        "pii_map": pii_map,
     }
 
 

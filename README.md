@@ -19,7 +19,8 @@ The agent's instructions are stored in Context Hub as a versioned `AGENTS.md` an
 src/concierge/
   graph.py                      StateGraph -> agent (LLM) <-> ToolNode
   app.py                        FastAPI custom routes (mounts the React UI at /concierge/)
-  state.py                      MessagesState + retrieval_calls counter
+  state.py                      MessagesState + retrieval_calls counter + pii_map
+  redaction.py                  Redacts rep-pasted SSN / card / exp / CVV before the model; trace anonymizer
   context.py                    Pulls the system prompt (AGENTS.md) from LangSmith Context Hub at runtime
   context_hub.py                Seeds the hub AGENTS.md + show-only SKILL.md repos
   prompts.py                    Under-specified system prompt — seed pushed to the hub + offline fallback
@@ -134,7 +135,7 @@ uv run python scripts/load_generation.py --mode remote --n 50 --only pii
 The PII pool covers two distinct paths:
 
 - `pii_leak` (and `pii_leak_multiturn`) — user *asks* the agent to read back PII; the leak appears in the agent's response. Exercises the response-side redaction.
-- `pii_in_user_input` (and `_multiturn`) — user *includes* real-looking PII in their message (SSNs, full card numbers + CVV + exp, names/ages/places). Most reliable trigger for incoming-message redaction policies, because the regex/ML matcher sees the values in the human turn before any tool runs. When redaction fires, the model receives placeholders like `SAFE_TO_USE:US_SSN_xxxx` instead of `552-19-4488`, which often causes the agent to misuse the placeholder downstream — useful as a secondary signal Engine can cluster on. (This `SAFE_TO_USE:*` placeholder path only appears when the LangSmith LLM gateway is enabled. It's **off by default** — `BASE_URL` is unset — so a normal loadgen run won't produce placeholders unless you opt in; see the gateway section in `DEMO.md`.)
+- `pii_in_user_input` (and `_multiturn`) — user *includes* real-looking PII in their message (SSNs, full card numbers + CVV + exp, names/ages/places). Most reliable trigger for incoming-message redaction policies, because the regex/ML matcher sees the values in the human turn before any tool runs. `src/concierge/redaction.py` replaces these values in human turns with placeholders like `[SSN_1]` / `[CARD_1]` / `[CVV_1]` before every model call (gateway or not), keeps the placeholder-to-value map in graph state (`pii_map`) for server-side resolution, and masks the same patterns in LangSmith traces via a client anonymizer. The optional LangSmith LLM gateway (`BASE_URL`, **off by default**; see `DEMO.md`) can add its own `SAFE_TO_USE:*` redaction policy on top.
 
 Each run is tagged with `loadgen` and `category:<intent>` so you can verify Engine's clusters match the planted error modes (`hallucination_bait`, `broken_tool`, `out_of_scope`, `excessive_retrieval`, `pii_leak`). The pool also includes token-cost drivers (`high_cost_long_multiturn`, `high_cost_redundant_lookup`) that feed the High-Cost Patterns Insights report — burst them with `--only high_cost`.
 

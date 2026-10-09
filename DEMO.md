@@ -142,7 +142,7 @@ For each issue Engine surfaces (hallucinations + PII):
 
 ## 4. Optional: PII gateway demo
 
-The gateway is currently disabled (`BASE_URL` not in `.env`) so PII redaction at the model boundary is not in play. To re-add that beat:
+The gateway is currently disabled (`BASE_URL` not in `.env`). Rep-pasted SSNs, card numbers, expirations, and CVVs are already replaced with placeholders by `src/concierge/redaction.py` before every model call and masked in traces, so the gateway policy is an extra layer rather than the only one. To re-add that beat:
 
 1. **Rotate the Provider Secret in LangSmith** (Settings → LLM Gateway → Provider Secrets → OpenAI) to a key on an account with budget.
 2. Add to `.env`:
@@ -150,7 +150,7 @@ The gateway is currently disabled (`BASE_URL` not in `.env`) so PII redaction at
    BASE_URL="https://gateway.smith.langchain.com/openai/v1"
    ```
 3. `uv run langgraph deploy`.
-4. The agent now routes through the gateway. Test in chat: ask the agent to "verify customer with SSN 552-19-4488". The model should receive the SSN as `SAFE_TO_USE:US_SSN_xxxx`, which the agent then misuses downstream — a useful secondary failure mode.
+4. The agent now routes through the gateway. Test in chat: ask the agent to "verify customer with SSN 552-19-4488". The model receives the SSN as `[SSN_1]` because in-app redaction runs first; the gateway policy still covers anything the in-app patterns don't match.
 
 Skip this if rotation isn't possible — the rest of the demo doesn't depend on it.
 
