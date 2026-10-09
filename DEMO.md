@@ -66,8 +66,10 @@ uv run python -m scripts.setup_context_hub
 ```bash
 git checkout main
 git pull
-uv run langgraph deploy
+uv run python -m scripts.deploy
 ```
+
+`scripts/deploy.py` refuses a dirty working tree and stamps `LANGSMITH_REVISION_ID=$(git rev-parse HEAD)` into `.env` before running `langgraph deploy`, so every trace's `revision_id` metadata names the deployed commit.
 
 If you can skip the redeploy because the agent is already running pre-fix code, do — saves ~5 min.
 
@@ -149,7 +151,7 @@ The gateway is currently disabled (`BASE_URL` not in `.env`) so PII redaction at
    ```
    BASE_URL="https://gateway.smith.langchain.com/openai/v1"
    ```
-3. `uv run langgraph deploy`.
+3. `uv run python -m scripts.deploy`.
 4. The agent now routes through the gateway. Test in chat: ask the agent to "verify customer with SSN 552-19-4488". The model should receive the SSN as `SAFE_TO_USE:US_SSN_xxxx`, which the agent then misuses downstream — a useful secondary failure mode.
 
 Skip this if rotation isn't possible — the rest of the demo doesn't depend on it.
@@ -170,6 +172,16 @@ In order, top to bottom — each should take a minute:
 *Cause:* OpenAI key out of budget.
 *Fix:* Top up the account, or rotate `.env`'s `OPENAI_API_KEY` to a personal
 key and redeploy. If using the gateway, rotate the Provider Secret instead.
+
+**403 / PermissionDenied on the model call** (agent replies "The assistant can't reach its language model right now…")
+*Cause:* The provider or LLM Gateway rejected the deployment's credential —
+an unauthorized/revoked `OPENAI_API_KEY`, a `LANGSMITH_API_KEY` without gateway
+access when `BASE_URL` is set, or a missing Provider Secret. A deployment built
+from an uncommitted tree (e.g. a local `ChatAnthropic` swap with no authorized
+Anthropic credential) fails the same way; compare the trace's `revision_id`
+metadata with `main`.
+*Fix:* Set or rotate the credential in `.env` (or the gateway Provider Secret),
+then redeploy from committed `main` with `uv run python -m scripts.deploy`.
 
 **CI workflow skipped on a fresh PR**
 *Cause:* PR is a draft.

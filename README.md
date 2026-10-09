@@ -33,6 +33,7 @@ scripts/
   load_generation.py            Runs ~150 mixed conversations against the agent
   setup_context_hub.py          One-shot: seeds the hub with AGENTS.md + demo skills
   teardown_context_hub.py       Delete context hub artifacts  
+  deploy.py                     Deploys committed HEAD, stamping LANGSMITH_REVISION_ID into .env
 evals/
   evaluators.py                 LLM judges (hallucination, trajectory) + pii_leak_rate regex check
   run_experiment.py             aevaluate(...) runner; pick golden / pii / hallucinations
@@ -73,6 +74,7 @@ Required environment variables (see `.env.example`):
 | `LANGSMITH_WORKSPACE_ID` | Workspace (tenant) the Context Hub repo is seeded into |
 | `CONCIERGE_MODEL` | _(optional)_ override the agent's chat model |
 | `LANGGRAPH_DEPLOYMENT_URL` | _(optional)_ deployment URL for `load_generation.py --mode remote` |
+| `LANGSMITH_REVISION_ID` | _(set by `scripts/deploy.py`)_ deployed git SHA, recorded as trace `revision_id` |
 
 ### Seed Context Hub (one-time)
 
@@ -204,8 +206,11 @@ npm --prefix frontend install
 npm --prefix frontend run build
 
 uv tool install langgraph-cli
-uv run langgraph deploy
+git add frontend/dist && git commit -m "build: refresh frontend bundle"  # only if the build changed it
+uv run python -m scripts.deploy
 ```
+
+`scripts/deploy.py` refuses to deploy a dirty working tree, writes `LANGSMITH_REVISION_ID=$(git rev-parse HEAD)` into `.env`, and runs `langgraph deploy` (extra args pass through). Every trace from the deployment then carries the deployed commit as `revision_id` metadata.
 
 The deployment manifest (`langgraph.json`) registers one assistant `agent` (`src/concierge/graph.py:graph`) and one custom HTTP app (`src/concierge/app.py:app`) that mounts the built React UI at `/concierge/`.
 

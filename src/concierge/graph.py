@@ -9,10 +9,11 @@ Exported as `graph` for LangSmith / LangGraph CLI deployment.
 
 from __future__ import annotations
 
+import logging
 import os
 
 from dotenv import load_dotenv
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -22,6 +23,13 @@ from concierge.state import ConciergeState
 from concierge.tools import TOOLS
 
 load_dotenv(override=True)
+
+logger = logging.getLogger(__name__)
+
+MODEL_UNAVAILABLE_MESSAGE = (
+    "The assistant can't reach its language model right now (provider rejected "
+    "the request). Please try again shortly or escalate to support."
+)
 
 # The system prompt (AGENTS.md) is pulled from LangSmith Context Hub at module
 # import; a hub edit is picked up on the next process start. Falls back to the
@@ -50,9 +58,19 @@ def agent_node(state: ConciergeState) -> dict:
     """Call the LLM with the message history plus the system prompt."""
     model = _make_model()
     messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
-    response = model.invoke(messages)
-
     retrieval_calls = state.get("retrieval_calls", 0)
+    try:
+        response = model.invoke(messages)
+    except Exception as exc:
+        # OpenAI and Anthropic SDK auth/permission errors both carry status_code 401/403.
+        if getattr(exc, "status_code", None) not in (401, 403):
+            raise
+        logger.exception("Model provider rejected the request")
+        return {
+            "messages": [AIMessage(content=MODEL_UNAVAILABLE_MESSAGE)],
+            "retrieval_calls": retrieval_calls,
+        }
+
     tool_calls = getattr(response, "tool_calls", None) or []
     new_retrievals = sum(
         1 for call in tool_calls if call.get("name") == "search_banking_docs"
