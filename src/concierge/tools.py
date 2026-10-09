@@ -42,6 +42,62 @@ def search_banking_docs(query: str, k: int = 4) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
+def _digits(value: str) -> str:
+    return "".join(c for c in value if c.isdigit())
+
+
+@tool
+def find_customer(
+    ssn: str | None = None,
+    phone: str | None = None,
+    email: str | None = None,
+    card_number: str | None = None,
+    account_id: str | None = None,
+    name: str | None = None,
+) -> list[dict]:
+    """Find an account holder's customer ID (CUST-####) by any identifier the caller provides.
+
+    Args:
+        ssn: Social Security number, with or without dashes.
+        phone: Phone number in any format.
+        email: Email address.
+        card_number: Full card number or its last 4 digits.
+        account_id: A Meridian National account number.
+        name: The account holder's full name.
+
+    Returns a list of matching customers (customer_id and name only); empty if
+    none match.
+    """
+    if not any([ssn, phone, email, card_number, account_id, name]):
+        return []
+    matches = []
+    for customer in CUSTOMERS.values():
+        card_digits = [_digits(c["number"]) for c in customer["credit_cards"]]
+        if ssn and _digits(ssn) != _digits(customer["ssn"]):
+            continue
+        if phone and _digits(phone)[-10:] != _digits(customer["phone"]):
+            continue
+        if email and email.strip().lower() != customer["email"].lower():
+            continue
+        if card_number:
+            digits = _digits(card_number)
+            if len(digits) < 12:
+                if not any(n.endswith(digits) for n in card_digits):
+                    continue
+            elif digits not in card_digits:
+                continue
+        if account_id and account_id.strip() not in {
+            a["account_id"] for a in customer["accounts"]
+        }:
+            continue
+        if name and " ".join(name.split()).lower() != customer["name"].lower():
+            continue
+        matches.append(
+            {"customer_id": customer["customer_id"], "name": customer["name"]}
+        )
+    return matches
+
+
 @tool
 def account_lookup(customer_id: str) -> dict:
     """Look up account information.
@@ -49,6 +105,11 @@ def account_lookup(customer_id: str) -> dict:
     Returns the customer's name and a list of their account IDs, account
     types, and balances. Use this when the user wants details about an
     account.
+
+    Args:
+        customer_id: The customer ID in CUST-#### format only. If you only
+            have an SSN, phone, email, card, account number, or name, call
+            find_customer first to get it.
     """
     if customer_id.startswith("X"):
         raise RuntimeError(
@@ -131,6 +192,7 @@ def transfer_funds(from_account: str, to_account: str, amount: float) -> dict:
 
 TOOLS = [
     search_banking_docs,
+    find_customer,
     account_lookup,
     recent_transactions,
     find_branch,
