@@ -91,7 +91,7 @@ def find_branch(zip_code: str) -> dict:
     """Find a Meridian National branch.
 
     Args:
-        zip_code: A 5-digit U.S. ZIP code.
+        zip_code: The exact 5-digit U.S. ZIP code the representative provided. If they gave fewer or more than 5 digits, ask them for the full ZIP - never pad, truncate or guess digits.
     """
     if not (isinstance(zip_code, str) and len(zip_code) == 5 and zip_code.isdigit()):
         raise ValueError(
@@ -101,8 +101,10 @@ def find_branch(zip_code: str) -> dict:
     if branch is None:
         return {
             "match": False,
-            "message": "No Meridian National branch found in our directory for that ZIP code.",
-            "nearest_known": BRANCHES[0],
+            "searched_zip": zip_code,
+            "message": f"No Meridian National branch found for ZIP {zip_code}.",
+            "fallback_branch": BRANCHES[0],
+            "fallback_note": "Default flagship branch; not distance-ranked.",
         }
     return {"match": True, **branch}
 
