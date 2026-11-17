@@ -1,0 +1,14 @@
+src/concierge/graph.py
+  h_0615fc48a2f10f 33,45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7770337b08765de561dd1a277e951830a1e6fec0",
+  "prompts": {},
+  "humans": {
+    "h_0615fc48a2f10f": {
+      "author": "Avtar <118772076+avtarraikmo@users.noreply.github.com>"
+    }
+  }
+}
