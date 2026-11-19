@@ -13,6 +13,8 @@ to cluster after the load generator runs:
 
 from __future__ import annotations
 
+import re
+
 from langchain_core.tools import tool
 
 from concierge.mock_data import (
@@ -22,6 +24,16 @@ from concierge.mock_data import (
     find_branch_by_zip,
 )
 from concierge.retrieval import retrieve
+
+
+def _require_customer_id_format(customer_id: str) -> None:
+    """Raise if customer_id is not a CUST-#### ID, so no lookup is attempted."""
+    if not re.fullmatch(r"CUST-\d{4}", customer_id):
+        raise ValueError(
+            f"Invalid customer ID format {customer_id!r}; expected CUST-#### "
+            "(e.g. CUST-0001). No lookup was performed, so this says nothing "
+            "about whether the person is a Meridian National customer."
+        )
 
 
 @tool
@@ -49,11 +61,17 @@ def account_lookup(customer_id: str) -> dict:
     Returns the customer's name and a list of their account IDs, account
     types, and balances. Use this when the user wants details about an
     account.
+
+    Args:
+        customer_id: A Meridian National customer ID in the form CUST-####
+            (e.g. CUST-0001). SSNs, phone numbers, card numbers, and account
+            numbers are not accepted.
     """
     if customer_id.startswith("X"):
         raise RuntimeError(
             "Customer record service is temporarily unavailable. Try again later."
         )
+    _require_customer_id_format(customer_id)
     customer = CUSTOMERS.get(customer_id)
     if customer is None:
         raise ValueError(
@@ -68,7 +86,9 @@ def recent_transactions(customer_id: str, limit: int = 5) -> list[dict]:
     """Retrieve a customer's most recent transactions.
 
     Args:
-        customer_id: The customer ID (e.g. CUST-0001).
+        customer_id: A Meridian National customer ID in the form CUST-####
+            (e.g. CUST-0001). SSNs, phone numbers, card numbers, and account
+            numbers are not accepted.
         limit: Optional number of transactions to return.
     """
     if limit <= 0:
@@ -77,6 +97,7 @@ def recent_transactions(customer_id: str, limit: int = 5) -> list[dict]:
         raise ValueError(
             f"limit {limit} exceeds the maximum of 50. Pick a smaller number."
         )
+    _require_customer_id_format(customer_id)
     if customer_id not in CUSTOMERS:
         raise ValueError(
             f"No customer found with ID {customer_id!r}. "
